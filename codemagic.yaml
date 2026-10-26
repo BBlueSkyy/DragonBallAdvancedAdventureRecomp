@@ -1,0 +1,66 @@
+# Private-source Android ARM64 build. Use Codemagic's personal free mac_mini_m2 tier.
+# No commercial ROM or BIOS is fetched, committed or bundled.
+workflows:
+  android-arm64-debug:
+    name: Dragon Ball Advanced Adventure - Android ARM64
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      java: 17
+      vars:
+        CMAKE_BUILD_PARALLEL_LEVEL: "2"
+        GRADLE_OPTS: "-Dorg.gradle.workers.max=2"
+    scripts:
+      - name: Fetch pinned engine and interface
+        script: |
+          set -eu
+          git clone https://github.com/BBlueSkyy/gbarecomp.git gbarecomp
+          git -C gbarecomp checkout e353848
+          git -C gbarecomp submodule set-url external/arm-recomp-core https://github.com/mstan/arm-recomp-core.git
+          git -C gbarecomp submodule update --init --recursive --jobs 4
+          git clone https://github.com/mstan/recomp-ui.git recomp-ui
+          git -C recomp-ui checkout 3f1d6f1
+          git -C recomp-ui submodule update --init --recursive --jobs 4
+      - name: Generate ROM-free configuration
+        script: |
+          set -eu
+          python3 scripts/generate_ci_metadata.py
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+      - name: Ensure Android SDK components
+        script: |
+          set -eu
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          "$SDKMANAGER" --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+      - name: Install pinned Gradle
+        script: |
+          set -eu
+          mkdir -p .ci-tools
+          curl --fail --location --retry 3 \
+            https://services.gradle.org/distributions/gradle-8.11.1-bin.zip \
+            --output .ci-tools/gradle-8.11.1-bin.zip
+          unzip -q .ci-tools/gradle-8.11.1-bin.zip -d .ci-tools
+          .ci-tools/gradle-8.11.1/bin/gradle --version
+      - name: Build debug APK for ARM64
+        script: |
+          set -eu
+          cd android
+          ../.ci-tools/gradle-8.11.1/bin/gradle :app:assembleDebug \
+            -PgbaAbis=arm64-v8a \
+            -PgbaNativeJobs=1 \
+            --no-daemon \
+            --max-workers=2 \
+            --stacktrace
+      - name: Inspect output
+        script: |
+          set -eu
+          ls -lah android/app/build/outputs/apk/debug/
+          shasum -a 256 android/app/build/outputs/apk/debug/*.apk
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
