@@ -1,5 +1,9 @@
 #include <string>
 #include <vector>
+#include <cstdlib>
+#if defined(__ANDROID__)
+#include <SDL.h>
+#endif
 #include "mobile_platform.h"
 #include "runtime.h"
 #include "game_launcher_boot.h"
@@ -37,6 +41,15 @@ static int game_main(int argc, char** argv) {
   options.launcher_expose_gyro = false;
 #if defined(__ANDROID__)
   options.ui_touch_friendly = true;
+  // Opt-in for this diagnostic branch only. The engine records per-frame
+  // wall-time phases and writes this ROM-free CSV on a normal game exit.
+  // SDL provides the app-specific external-files directory; no broad storage
+  // permission, downloads access, or private ROM export is required.
+  if (const char* dir = SDL_AndroidGetExternalStoragePath(); dir && *dir) {
+    const std::string profile_path =
+        std::string(dir) + "/dragonball_frame_phase.csv";
+    (void)::setenv("GBARECOMP_FRAME_PHASE", profile_path.c_str(), 1);
+  }
 #endif
   if (game_launcher_preboot(args, options)) return 0;
   std::vector<char*> native_args;
