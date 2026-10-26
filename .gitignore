@@ -1,0 +1,21 @@
+# Protected / local assets
+*.gba
+*.agb
+*.sav
+*.bin
+rom_identity.json
+variants/*/game.toml
+android/game_android.toml
+android/app/build.gradle
+variants/*/generated/
+# Local checkouts and artifacts
+gbarecomp/
+recomp-ui/
+android/.gradle/
+android/app/build/
+build/
+*.apk
+local.properties
+variants/*/cartridge.cmake
+
+__pycache__/
