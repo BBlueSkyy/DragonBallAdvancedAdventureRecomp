@@ -75,6 +75,10 @@ int main() {
 
     observe_menu_frame(nullptr,0,0);
     assert(touch(99,96)==neutral); // no accidental gameplay A
+    const Frame fading_data=menu(Scene::Data,-1);
+    observe_menu_frame(fading_data.data(),W,H);
+    assert(touch(90,96)==neutral); // no arbitrary data slot during fade
+    assert(touch(200,36)==neutral); // RETURN must not fire in ambiguous fade
     observe_menu_frame(data.data(),W,H);
     assert(touch(99,96)==DOWN); // tap DATA2 from selected DATA1
     assert(idle()==DOWN);
