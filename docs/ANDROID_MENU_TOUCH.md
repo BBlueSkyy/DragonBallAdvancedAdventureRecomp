@@ -7,7 +7,7 @@
 - Game-owned `src/dragonball_menu_touch.h` reads the raw, unfiltered **240×160 RGB888** output from an optional engine present callback. It verifies four **real, stable red-border samples** (left, right, top, bottom) and samples the unobstructed header background at y=15 to distinguish violet DATA MENU from cream GAME MENU. Neither gameplay nor transitions are treated as a menu.
 - The selected DATA row is identified by **bright red label characters** in the inner text rectangle; shared gold borders are not counted. GAME MENU selection is identified by reddish-brown lettering as opposed to the inactive pale violet letters; the search rectangles stay inside the letter area rather than counting the orange frame, and ambiguous highlights are rejected. An ambiguous selection is never used to choose a different row.
 - `TouchHub` recognizes short one-finger taps only. The guest-frame input policy uses GBA **KEYINPUT** at VBlank to synthesize the required Up/Down/Left/Right direction(s), separated by released frames, then **A** to confirm. Tapping the upper-right **RETURN** label sends **B**. A tap in blank space while a selection is known confirms the highlighted option.
-- If the detected scene disappears during the sequence, any remaining synthetic keys are dropped immediately, preventing a queued A from becoming a gameplay attack. Touching the on-screen A/B/L/R or D-pad remains controlled by the engine's existing pad routing. Three-finger menu and unclaimed long press remain host-owned.
+- If the detected scene disappears during the sequence, any remaining synthetic keys are dropped immediately, preventing a queued A from becoming a gameplay attack. Touching the on-screen A/B/L/R or D-pad remains controlled by the engine's existing pad routing. The three-finger shortcut and Android Back remain available for runtime settings; single-finger LongPress is now claimed by the Dragon Ball touch policy, preventing the host menu from stealing focus while holding the game screen.
 - No ROM offsets, HLE, direct save-slot writes, UI OCR, guest-memory patches or background threads. A tiny atomic scene observation is reset to None on other screens. This feature is Android opt-in for this title only.
 - Neither the HALT/IRQ/SWI fix on main nor its performance-critical shards are altered.
 
@@ -81,3 +81,30 @@ This validates menu recognition against the *rescaled recording*, not the
 original native 240x160 PPU buffer. Further guest/host timing and Android
 touch-input verification still require a newly built APK on the Moto G100.
 No change to HALT, IRQ/SWI, DMA, guest shards, shaders or button positioning.
+
+
+## 27 October device-video finding: holding opens runtime settings
+
+The 16.6-second Moto G100 recording shows the game's DATA MENU alternating
+with the full-screen purple **Game Boy Advance runtime settings** UI (Graphics,
+Audio, System, Display, Controls). This is not a Dragon Ball submenu.
+The engine maps an **unclaimed single-finger LongPress** to opening the
+runtime UI after about 650ms; `src/main.cpp` previously claimed only
+`kTouchClaimTap`, so a held finger stole input focus from the emulated GBA.
+
+**Fix:** game `RunOptions::touch_gesture_claims` now includes
+`kTouchClaimLongPress` as well as Tap, without changing engine
+`TouchHub`, guest interrupts, HALT, DMA or shards. The menu policy already
+uses raw `TouchPhase::Down` to act on the first contact; it ignores
+`Move`, `Up` and LongPress as extra selections. A ROM-free policy test
+simulates a Down followed by 60 Move frames, a LongPress and Up and asserts
+no second synthesized key press. Android Back / the three-finger host
+shortcut can still open settings deliberately.
+
+**Important limitation:** the recording proves the accidental settings
+shortcut. It does not independently prove the earlier failed *short taps*
+are all caused by it. An approximate reconstruction of the DATA MENU
+frame also passes current red-border and purple-title detection, so an
+actual Android build is still needed to verify raw Down delivery through
+`TouchHub`, the VBlank policy and active-low `KEYINPUT`. No remote build
+has been started and no on-device fix can be claimed yet.
