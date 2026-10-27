@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <initializer_list>
 
 // Read-only visual Ki gauge for Dragon Ball: Advanced Adventure (USA).
 // Operates on the unfiltered, native 240x160 RGB888 guest framebuffer.
