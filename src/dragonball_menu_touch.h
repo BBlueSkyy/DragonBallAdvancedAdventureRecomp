@@ -160,10 +160,11 @@ inline std::uint16_t menu_input_frame(const gbarecomp::TouchFrameInfo* f) {
             pending.press(1); // B = return
         } else {
             const int target=hit_target(o.scene,x,y);
-            // Selecting an unhighlighted item requires a reliable
-            // highlighted origin; do not blindly confirm the wrong row.
-            if(target>=0 && o.selected<0) return 0x03FFu;
-            if(target>=0 && o.selected>=0) {
+            // All menu confirmations require a reliable highlighted item.
+            // During an animation/fade a banner may still be recognizable
+            // without a selection: ignore taps until the scene is stable.
+            if(o.selected<0) return 0x03FFu;
+            if(target>=0) {
                 if(o.scene==Scene::Data) {
                     for(int d=o.selected;d<target;d++)pending.press(7);
                     for(int d=o.selected;d>target;d--)pending.press(6);
