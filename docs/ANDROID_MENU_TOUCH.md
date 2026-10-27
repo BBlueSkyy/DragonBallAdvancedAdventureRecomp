@@ -49,3 +49,35 @@ Android test run.** The menu-probe pixels were checked using captured video
 frames, but the SDK event-to-guest path and actual touch response are still
 pending real-device confirmation. No claim of confirmed fix until the next
 APK is tested on Moto G100.
+
+
+## Actual capture-color regression after on-device failure
+
+The real video evidence exposes a **reproducible root cause** for the still
+inoperative menu touches, beyond Down-vs-Tap dispatch. The classifier checked
+solid-red pixels at (237,70) and (30,2), but their observed values in the
+reconstructed 240x160 recording are approximately (255,115,85) and
+(199,19,18); they fail the required red > 200 / green < 85. The old
+DATA-title predicate also demanded blue > red+13, while the actual dark
+magenta title measures ~ (106,22,70). Thus a genuine DATA frame was
+misidentified as Scene::None and `menu_input_frame` suppressed *all*
+synthesized presses. The GAME title was valid but failed the border gate.
+
+The repaired classification checks (3,70), (238,70), (30,3),
+(30,157), away from the antialiased border positions. DATA-title samples
+are recognized as dark red/magenta (blue exceeds green, not red); GAME
+uses contrasting brown/gold. The previously failing fixture in
+`tests/menu_touch_test.cpp` now reproduces recorded border/header RGB
+rather than hand-picked pure red and pale violet values.
+
+Independent verification against **five different frames** extracted from
+the user's video: DATA frames 4, 5 and 9 recognized as (Data, highlighted 0);
+GAME frames 11 and 12 recognized as (Game, highlighted 0).
+All five failed the previous four-point border gate. The classifier retains
+the selected-label confidence check and explicit absence guard, so touches
+do not synthesize A during gameplay or fades.
+
+This validates menu recognition against the *rescaled recording*, not the
+original native 240x160 PPU buffer. Further guest/host timing and Android
+touch-input verification still require a newly built APK on the Moto G100.
+No change to HALT, IRQ/SWI, DMA, guest shards, shaders or button positioning.
