@@ -56,6 +56,18 @@ std::uint16_t idle() {
     gbarecomp::TouchFrameInfo f{};
     return menu_input_frame(&f);
 }
+std::uint16_t raw_touch(gbarecomp::TouchPhase phase,float x,float y,
+                        bool in_view=true) {
+    gbarecomp::TouchEvent e{};
+    e.phase=phase;
+    e.view_x=x;
+    e.view_y=y;
+    e.in_view=in_view;
+    gbarecomp::TouchFrameInfo f{};
+    f.events=&e;
+    f.event_count=1;
+    return menu_input_frame(&f);
+}
 int main() {
     constexpr auto A=std::uint16_t(0x3fe),B=std::uint16_t(0x3fd);
     constexpr auto DOWN=std::uint16_t(0x37f);
@@ -120,5 +132,29 @@ int main() {
     for(int i=0;i<3;++i)idle();
     observe_menu_frame(game.data(),W,H);
     assert(touch(78,70)==A); // tap currently highlighted STORY
-    std::puts("menu touch: DATA rows, GAME tiles, pulse/release, return, scene guard OK");
+    // Production Android path: Down arrives before any recognized Tap.
+    observe_menu_frame(nullptr,0,0);
+    assert(idle()==neutral); // flush previous sequence on scene change
+    observe_menu_frame(game.data(),W,H);
+    assert(raw_touch(gbarecomp::TouchPhase::Down,78,70)==A);
+    assert(idle()==A);
+    assert(idle()==neutral);assert(idle()==neutral);
+    // The release/gesture of the same finger must NOT confirm again.
+    assert(raw_touch(gbarecomp::TouchPhase::Up,78,70)==neutral);
+    assert(raw_touch(gbarecomp::TouchPhase::Move,78,70)==neutral);
+    // A touch to an inactive option plans the direction and confirmation.
+    assert(raw_touch(gbarecomp::TouchPhase::Down,166,110)==DOWN);
+    assert(idle()==DOWN);
+    assert(idle()==neutral);assert(idle()==neutral);
+    assert(idle()==RIGHT);assert(idle()==RIGHT);
+    assert(idle()==neutral);assert(idle()==neutral);
+    assert(idle()==A);assert(idle()==A);
+    assert(idle()==neutral);assert(idle()==neutral);
+    // No touch-generated action outside the recognized menu.
+    observe_menu_frame(nullptr,0,0);
+    assert(raw_touch(gbarecomp::TouchPhase::Down,78,70)==neutral);
+    // Out-of-view touch cannot change the in-game menu.
+    observe_menu_frame(game.data(),W,H);
+    assert(raw_touch(gbarecomp::TouchPhase::Down,78,70,false)==neutral);
+    std::puts("menu touch: DATA/GAME, SDL Down, ignored Up/Move, VBlank pulses, return, scene guard OK");
 }
