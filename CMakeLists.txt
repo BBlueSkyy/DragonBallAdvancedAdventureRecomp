@@ -27,6 +27,7 @@ add_subdirectory("${GBARECOMP_ROOT}" gbarecomp_build EXCLUDE_FROM_ALL)
 # The other game/engine branches retain their ordinary hot paths unchanged.
 if(ANDROID)
   target_compile_definitions(gbarecomp_runtime PRIVATE GBARECOMP_PERF_HUD=1)
+  target_compile_definitions(gbarecomp_armv4t PRIVATE GBARECOMP_PERF_HUD=1)
 endif()
 if(ANDROID)
   add_library(main SHARED src/main.cpp ${GENERATED})
