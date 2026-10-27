@@ -44,7 +44,7 @@ jobs:
       - name: Fetch pinned GBARecomp engine and UI
         run: |
           git clone https://github.com/BBlueSkyy/gbarecomp.git gbarecomp
-          git -C gbarecomp checkout 382fa61040447b56ee08bcf2ee337e2b0835cfb3
+          git -C gbarecomp checkout 44cd7ed399ffc80e155b98cb54dde5bc73f05cdd
           git -C gbarecomp submodule set-url external/arm-recomp-core https://github.com/mstan/arm-recomp-core.git
           git -C gbarecomp submodule update --init --recursive --jobs 4
           git clone https://github.com/mstan/recomp-ui.git recomp-ui
