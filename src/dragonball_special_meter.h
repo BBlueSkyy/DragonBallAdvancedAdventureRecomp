@@ -1,45 +1,49 @@
 #pragma once
 #include <cstdint>
 
-// Visual read-only HUD probe for the verified USA game's first story stage.
-// The special gauge is drawn along the lower-left of the native 240x160 GBA
-// image. This is an intentionally conservative **calibration candidate**:
-// no raw guest-memory address is guessed or written. Return -1 when the
-// pattern is unrecognized, rather than pretending the special is charged.
-// Calibrate on a real screenshot of both empty and full meter before claiming
-// production readiness detection.
+// Read-only visual Ki gauge for Dragon Ball: Advanced Adventure (USA).
+// Operates on the unfiltered, native 240x160 RGB888 guest framebuffer.
+// Never reads guessed emulated RAM or changes game inputs/energy.
 namespace dragonball {
 inline float special_meter_fill(const std::uint8_t* rgb,
                                 unsigned width, unsigned height) {
     if (!rgb || width != 240 || height != 160) return -1.0f;
-    // Center of the colored horizontal Ki gauge, skipping left kanji and
-    // right frame. Coordinates are native guest pixels, *not* Android pixels.
-    // Calibrated against the native-scaled stage screenshot: x24..39 is
-    // colored charge, x40..42 stays pale until full; y151 is dark edging.
-    constexpr int x_begin = 25, x_end = 42;
-    constexpr int ys[3] = {146, 147, 148};
-    unsigned filled = 0, samples = 0;
-    for (int x = x_begin; x <= x_end; ++x) {
-        int vote = 0;
-        for (int y : ys) {
-            const auto* p = rgb + (static_cast<unsigned>(y) * width + x) * 3u;
-            const int r = p[0], g = p[1], b = p[2];
-            if (r >= 150 && g >= 110 && b <= 90 &&
-                r >= g - 10 && g >= b + 70)
-                ++vote;
+    const auto pixel = [rgb, width](int x, int y) {
+        return rgb + (static_cast<unsigned>(y) * width +
+                      static_cast<unsigned>(x)) * 3u;
+    };
+    // Measured from two *actual* Moto G100 screenshots:
+    // the orange/yellow charge interior occupies x24..39, y146..149.
+    // x40 is the SILVER EDGE and x41..43 is the WHITE CAP.
+    // The previous x25..42 probe included the cap and could NEVER reach
+    // the >=96% threshold on a full bar (at most 15/18).
+    // Verify the stationary frame before treating random scenery as charge.
+    int bottom_black = 0;
+    for (int x : {26, 29, 32, 35, 38}) {
+        const auto* p = pixel(x, 151);
+        if (p[0] < 75 && p[1] < 75 && p[2] < 75) ++bottom_black;
+    }
+    const auto* cap = pixel(41, 147);
+    const auto* edge = pixel(40, 148);
+    const bool cap_white = cap[0] > 190 && cap[1] > 190 && cap[2] > 190;
+    const bool edge_gray = edge[0] >= 90 && edge[0] <= 215 &&
+                           (int(edge[0]) - int(edge[1]) < 24) &&
+                           (int(edge[1]) - int(edge[2]) < 24);
+    if (bottom_black < 4 || !cap_white || !edge_gray) return -1.0f;
+
+    int filled_columns = 0;
+    for (int x = 24; x <= 39; ++x) {
+        int chroma = 0;
+        // The actual gauge uses vivid yellow in the middle and orange
+        // at its edges; count both without classifying the white cap as Ki.
+        for (int y : {146, 147, 148, 149}) {
+            const auto* p = pixel(x, y);
+            const int r=p[0], g=p[1], b=p[2];
+            if (r >= 190 && g >= 100 && b <= 100 &&
+                r >= g - 10 && g > b + 65) ++chroma;
         }
-        if (vote >= 2) ++filled;
-        ++samples;
+        if (chroma >= 2) ++filled_columns;
     }
-    // Detect a dark horizontal lower boundary beneath the gauge. A yellow
-    // scenery patch alone must not automatically trigger an active special.
-    unsigned dark = 0;
-    for (int x = x_begin; x <= x_end; x += 3) {
-        constexpr int y = 151;
-        const auto* p = rgb + (y * width + x) * 3u;
-        if (p[0] < 100 && p[1] < 100 && p[2] < 100) ++dark;
-    }
-    if (dark < 3) return -1.0f;
-    return samples ? static_cast<float>(filled) / samples : -1.0f;
+    return static_cast<float>(filled_columns) / 16.0f;
 }
-} // namespace dragonball
+}  // namespace dragonball
