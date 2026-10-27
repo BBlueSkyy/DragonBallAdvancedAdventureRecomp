@@ -30,8 +30,13 @@ else()
   add_executable(DragonBallAdvancedAdventureRecomp src/main.cpp ${GENERATED})
   set(GAME_TARGET DragonBallAdvancedAdventureRecomp)
 endif()
-# First boot build: prioritize compiler memory and link success over guest-code performance.
+# Keep huge dispatch/symbol-map translation units at -O0 to minimize build cost.
+# Guest execution is performance-critical: the first-boot -O0 was intentionally
+# conservative, but is too slow for gameplay. Start with -O1 for the shards;
+# do not change the guest program, runtime semantics, or linker setup.
+file(GLOB GUEST_SHARDS CONFIGURE_DEPENDS "${VARIANT_DIR}/generated/recompiled_*.cpp")
 set_source_files_properties(${GENERATED} PROPERTIES COMPILE_OPTIONS "-O0;-g0")
+set_source_files_properties(${GUEST_SHARDS} PROPERTIES COMPILE_OPTIONS "-O1;-g0")
 target_include_directories(${GAME_TARGET} PRIVATE
   "${GBARECOMP_ROOT}/src/armv4t"
   "${GBARECOMP_ROOT}/src/gba"
