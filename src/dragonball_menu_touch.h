@@ -37,11 +37,16 @@ inline unsigned score_red_ink(const std::uint8_t* px, unsigned w,
 
 inline Observation classify(const std::uint8_t* p, unsigned w, unsigned h) {
     if (!p || w!=240 || h!=160) return {};
-    if (!red_frame(p,w,5,6) || !red_frame(p,w,230,154)) return {};
-    // Four widely spaced solid title-banner samples. Purple DATA and cream
-    // GAME menus share the red outer border, but differ at these points.
-    constexpr unsigned xx[4]={76,80,154,160};
-    constexpr unsigned yy[4]={28,29,27,25};
+    // The actual four stable border segments in the Android video are
+    // x=2 and x=237 at y=70, plus top/bottom horizontal red strips.
+    // (5,6) and (230,154) are *dark corner ornaments*, not red pixels.
+    if (!red_frame(p,w,2,70) || !red_frame(p,w,237,70) ||
+        !red_frame(p,w,30,2) || !red_frame(p,w,30,157)) return {};
+    // Use the interior background of the header at y=15, *above* the
+    // letters. The previous y=25..29 probes landed on white menu text.
+    // DATA uses violet; GAME uses cream/gold at these same locations.
+    constexpr unsigned xx[4]={80,95,125,150};
+    constexpr unsigned yy[4]={15,15,15,15};
     unsigned violet=0, cream=0;
     for(int k=0;k<4;k++) {
         const std::size_t i=(std::size_t(yy[k])*w+xx[k])*3;
@@ -58,10 +63,12 @@ inline Observation classify(const std::uint8_t* p, unsigned w, unsigned h) {
         {52,55,90,68},{52,86,90,100},{52,119,90,133}
     };
     static constexpr unsigned game_box[4][4]={
-        {45,62,110,77},{130,62,212,77},
-        {43,104,112,119},{128,104,210,119}
+        // Restrict to *letter interiors*. The old boxes counted red/gold
+        // border pixels and misidentified STORY as OPTION in the video.
+        {48,66,99,76},{135,66,198,76},
+        {48,109,105,118},{135,109,196,118}
     };
-    int best=-1; unsigned best_score=0;
+    int best=-1; unsigned best_score=0,runner_up_score=0;
     const unsigned n=scene==Scene::Data?3:4;
     for(unsigned k=0;k<n;k++) {
         const unsigned* r=scene==Scene::Data?data_box[k]:game_box[k];
@@ -75,10 +82,12 @@ inline Observation classify(const std::uint8_t* p, unsigned w, unsigned h) {
                        red>green*1.8f) ++score;
                 }
         } else score=score_red_ink(p,w,r[0],r[1],r[2],r[3]);
-        if(score>best_score){best_score=score;best=int(k);}
+        if(score>best_score){runner_up_score=best_score;best_score=score;best=int(k);}
+        else if(score>runner_up_score)runner_up_score=score;
     }
     // Avoid steering towards an invented selection on fades/animations.
-    if(best_score<(scene==Scene::Data?30u:72u)) best=-1;
+    if(best_score<(scene==Scene::Data?30u:24u) ||
+       best_score<runner_up_score+12u) best=-1;
     return {scene,best};
 }
 
