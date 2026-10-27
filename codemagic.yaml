@@ -15,7 +15,7 @@ workflows:
         script: |
           set -eu
           git clone https://github.com/BBlueSkyy/gbarecomp.git gbarecomp
-          git -C gbarecomp checkout 2e1cf401118c13ad971ff82d5d443836d4302988
+          git -C gbarecomp checkout bd5a78727d7ae60ba8738e8999e5854eed937685
           git -C gbarecomp submodule set-url external/arm-recomp-core https://github.com/mstan/arm-recomp-core.git
           git -C gbarecomp submodule update --init --recursive --jobs 4
           git clone https://github.com/mstan/recomp-ui.git recomp-ui
