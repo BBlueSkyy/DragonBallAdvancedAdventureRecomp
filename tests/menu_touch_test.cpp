@@ -160,6 +160,23 @@ int main() {
     assert(idle()==neutral);assert(idle()==neutral);
     assert(idle()==A);assert(idle()==A);
     assert(idle()==neutral);assert(idle()==neutral);
+    // A long hold is owned by this port (the runtime settings shortcut
+    // must not run); the menu policy only reacts once on the original Down.
+    observe_menu_frame(data.data(),W,H);
+    assert(raw_touch(gbarecomp::TouchPhase::Down,98,65)==A);
+    assert(idle()==A);assert(idle()==neutral);assert(idle()==neutral);
+    for(int k=0;k<60;++k) {
+        assert(raw_touch(gbarecomp::TouchPhase::Move,98,65)==neutral);
+    }
+    gbarecomp::Gesture held_gesture{};
+    held_gesture.kind=gbarecomp::GestureKind::LongPress;
+    held_gesture.start_in_view=true;
+    held_gesture.view_x=98;held_gesture.view_y=65;held_gesture.fingers=1;
+    gbarecomp::TouchFrameInfo held_frame{};
+    held_frame.gestures=&held_gesture;held_frame.gesture_count=1;
+    assert(menu_input_frame(&held_frame)==neutral);
+    assert(raw_touch(gbarecomp::TouchPhase::Up,98,65)==neutral);
+
     // No touch-generated action outside the recognized menu.
     observe_menu_frame(nullptr,0,0);
     assert(raw_touch(gbarecomp::TouchPhase::Down,78,70)==neutral);
