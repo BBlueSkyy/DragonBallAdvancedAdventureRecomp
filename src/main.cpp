@@ -47,7 +47,15 @@ static int game_main(int argc, char** argv) {
   // Gameplay is unchanged: unrecognized scenes synthesize no keys.
   options.mobile_menu_frame_probe = dragonball::menu_touch::observe_menu_frame;
   options.input_frame = dragonball::menu_touch::menu_input_frame;
-  options.touch_gesture_claims |= gbarecomp::kTouchClaimTap;
+  // Menu navigation owns both short taps and long holds. Unclaimed
+  // LongPress is an engine shortcut that opens runtime settings after
+  // ~650 ms, stealing touch focus from the GBA menu. The game policy
+  // already acts on the initial TouchEvent::Down, so a hold must not
+  // trigger a separate host action or an extra A press.
+  // Runtime settings remain available through Android Back / the
+  // engine's explicit menu paths, rather than holding game-screen pixels.
+  options.touch_gesture_claims |=
+      gbarecomp::kTouchClaimTap | gbarecomp::kTouchClaimLongPress;
 #endif
   if (game_launcher_preboot(args, options)) return 0;
   std::vector<char*> native_args;
