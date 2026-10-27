@@ -15,8 +15,12 @@ void pixel(Frame& im,unsigned x,unsigned y,unsigned r,unsigned g,unsigned b) {
 }
 Frame menu(Scene scene,int selected) {
     Frame f{};
-    pixel(f,5,6,253,0,0);pixel(f,230,154,253,0,0);
-    constexpr unsigned xx[4]={76,80,154,160}, yy[4]={28,29,27,25};
+    // Pixel layout derived from the *real* DATA/GAME menu frames.
+    // Corner ornaments are black at (5,6), (230,154).
+    for(const auto [x,y]: std::array<std::array<unsigned,2>,4>{{
+        {{2,70}},{{237,70}},{{30,2}},{{30,157}}
+    }}) pixel(f,x,y,253,0,0);
+    constexpr unsigned xx[4]={80,95,125,150}, yy[4]={15,15,15,15};
     for(unsigned k=0;k<4;k++)
         if(scene==Scene::Data)pixel(f,xx[k],yy[k],206,180,239);
         else pixel(f,xx[k],yy[k],255,238,173);
@@ -27,7 +31,7 @@ Frame menu(Scene scene,int selected) {
                 for(unsigned j=y[i];j<y[i]+5;j++)
                     for(unsigned x=54;x<74;x++)pixel(f,x,j,230,44,26);
     }else if(scene==Scene::Game) {
-        constexpr unsigned x[4]={52,143,52,143}, y[4]={64,64,106,106};
+        constexpr unsigned x[4]={52,143,52,143}, y[4]={67,67,110,110};
         for(unsigned i=0;i<4;i++)
             if(int(i)==selected)
                 for(unsigned yy=y[i];yy<y[i]+5;yy++)
@@ -62,14 +66,21 @@ int main() {
     assert(classify(data.data(),W,H).scene==Scene::Data);
     assert(classify(data.data(),W,H).selected==0);
     assert(classify(data.data(),W,159).scene==Scene::None);
-    auto no_border=data;pixel(no_border,5,6,0,0,0);
+    auto no_border=data;pixel(no_border,2,70,0,0,0);
     assert(classify(no_border.data(),W,H).scene==Scene::None);
     const Frame other_data=menu(Scene::Data,2);
     assert(classify(other_data.data(),W,H).selected==2);
     const Frame game=menu(Scene::Game,0);
     assert(classify(game.data(),W,H).scene==Scene::Game);
     assert(classify(game.data(),W,H).selected==0);
-    assert(classify(menu(Scene::Game,3).data(),W,H).selected==3);
+    for (int i=0;i<4;++i)
+        assert(classify(menu(Scene::Game,i).data(),W,H).selected==i);
+    for (int i=0;i<3;++i)
+        assert(classify(menu(Scene::Data,i).data(),W,H).selected==i);
+    // Regression: the old two probes are intentionally dark even though
+    // both real menus have the full bright red perimeter.
+    assert(!red_frame(data.data(),W,5,6));
+    assert(!red_frame(data.data(),W,230,154));
     assert(hit_target(Scene::Data,99,97)==1);
     assert(hit_target(Scene::Game,155,113)==3);
 
@@ -104,6 +115,9 @@ int main() {
     assert(idle()==neutral); // queued keys cancelled when gameplay begins
     assert(touch(90,65)==neutral);
 
+    observe_menu_frame(game.data(),W,H);
+    assert(touch(20,125)==A); // blank-space touch confirms current selection
+    for(int i=0;i<3;++i)idle();
     observe_menu_frame(game.data(),W,H);
     assert(touch(78,70)==A); // tap currently highlighted STORY
     std::puts("menu touch: DATA rows, GAME tiles, pulse/release, return, scene guard OK");
