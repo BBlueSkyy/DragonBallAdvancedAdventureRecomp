@@ -15,15 +15,20 @@ void pixel(Frame& im,unsigned x,unsigned y,unsigned r,unsigned g,unsigned b) {
 }
 Frame menu(Scene scene,int selected) {
     Frame f{};
-    // Pixel layout derived from the *real* DATA/GAME menu frames.
-    // Corner ornaments are black at (5,6), (230,154).
-    for(const auto [x,y]: std::array<std::array<unsigned,2>,4>{{
-        {{2,70}},{{237,70}},{{30,2}},{{30,157}}
-    }}) pixel(f,x,y,253,0,0);
+    // Raw color relationships reconstructed from the owner's recorded
+    // Android menus, *not* placeholder pure red/blue/gold fixtures.
+    // Old border tests incorrectly sampled antialiased/dark positions.
+    pixel(f,2,70,236,9,3);
+    pixel(f,237,70,255,115,85); // NOT bright red under red_frame()
+    pixel(f,30,2,199,19,18);    // NOT bright red under red_frame()
+    pixel(f,3,70,253,0,0);
+    pixel(f,238,70,250,1,0);
+    pixel(f,30,3,252,3,0);
+    pixel(f,30,157,253,1,0);
     constexpr unsigned xx[4]={80,95,125,150}, yy[4]={15,15,15,15};
     for(unsigned k=0;k<4;k++)
-        if(scene==Scene::Data)pixel(f,xx[k],yy[k],206,180,239);
-        else pixel(f,xx[k],yy[k],255,238,173);
+        if(scene==Scene::Data)pixel(f,xx[k],yy[k],106,22,70);
+        else pixel(f,xx[k],yy[k],150,70,11);
     if(scene==Scene::Data) {
         constexpr unsigned y[3]={53,84,117};
         for(unsigned i=0;i<3;i++)
@@ -78,7 +83,12 @@ int main() {
     assert(classify(data.data(),W,H).scene==Scene::Data);
     assert(classify(data.data(),W,H).selected==0);
     assert(classify(data.data(),W,159).scene==Scene::None);
-    auto no_border=data;pixel(no_border,2,70,0,0,0);
+    // Recorded frame reproduces the previously untested failure: old
+    // x=237 and top y=2 probes are not bright-red, DATA's title is
+    // red-magenta (blue<red), and the game must still recognize both.
+    assert(!red_frame(data.data(),W,237,70));
+    assert(!red_frame(data.data(),W,30,2));
+    auto no_border=data;pixel(no_border,3,70,0,0,0);
     assert(classify(no_border.data(),W,H).scene==Scene::None);
     const Frame other_data=menu(Scene::Data,2);
     assert(classify(other_data.data(),W,H).selected==2);
