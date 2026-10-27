@@ -23,6 +23,11 @@ if(NOT EXISTS "${VARIANT_DIR}/game.toml")
   message(FATAL_ERROR "No private game.toml. Run scripts/prepare_rom.py on your verified ROM.")
 endif()
 add_subdirectory("${GBARECOMP_ROOT}" gbarecomp_build EXCLUDE_FROM_ALL)
+# Only this Android diagnostic branch enables the live on-screen performance HUD.
+# The other game/engine branches retain their ordinary hot paths unchanged.
+if(ANDROID)
+  target_compile_definitions(gbarecomp_runtime PRIVATE GBARECOMP_PERF_HUD=1)
+endif()
 if(ANDROID)
   add_library(main SHARED src/main.cpp ${GENERATED})
   set(GAME_TARGET main)
