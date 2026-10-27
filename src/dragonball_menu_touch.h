@@ -145,7 +145,9 @@ inline std::uint16_t menu_input_frame(const gbarecomp::TouchFrameInfo* f) {
             return key;
         }
     }
-    if(o.scene==Scene::None) return 0x03FFu;
+    // Do not generate A/B or navigation until the highlight is visible:
+    // transition/fade frames can briefly retain the menu banner.
+    if(o.scene==Scene::None || o.selected<0) return 0x03FFu;
     for(std::size_t i=0;i<f->gesture_count;i++) {
         const auto& g=f->gestures[i];
         if(g.kind!=gbarecomp::GestureKind::Tap ||
@@ -160,10 +162,6 @@ inline std::uint16_t menu_input_frame(const gbarecomp::TouchFrameInfo* f) {
             pending.press(1); // B = return
         } else {
             const int target=hit_target(o.scene,x,y);
-            // All menu confirmations require a reliable highlighted item.
-            // During an animation/fade a banner may still be recognizable
-            // without a selection: ignore taps until the scene is stable.
-            if(o.selected<0) return 0x03FFu;
             if(target>=0) {
                 if(o.scene==Scene::Data) {
                     for(int d=o.selected;d<target;d++)pending.press(7);
