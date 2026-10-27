@@ -24,7 +24,8 @@ inline float special_meter_fill(const std::uint8_t* rgb,
         for (int y : ys) {
             const auto* p = rgb + (static_cast<unsigned>(y) * width + x) * 3u;
             const int r = p[0], g = p[1], b = p[2];
-            if (r >= 155 && g >= 105 && r >= g + 16 && g >= b + 50)
+            if (r >= 150 && g >= 110 && b <= 90 &&
+                r >= g - 10 && g >= b + 70)
                 ++vote;
         }
         if (vote >= 2) ++filled;
