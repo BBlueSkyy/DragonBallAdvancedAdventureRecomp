@@ -37,22 +37,27 @@ inline unsigned score_red_ink(const std::uint8_t* px, unsigned w,
 
 inline Observation classify(const std::uint8_t* p, unsigned w, unsigned h) {
     if (!p || w!=240 || h!=160) return {};
-    // The actual four stable border segments in the Android video are
-    // x=2 and x=237 at y=70, plus top/bottom horizontal red strips.
-    // (5,6) and (230,154) are *dark corner ornaments*, not red pixels.
-    if (!red_frame(p,w,2,70) || !red_frame(p,w,237,70) ||
-        !red_frame(p,w,30,2) || !red_frame(p,w,30,157)) return {};
-    // Use the interior background of the header at y=15, *above* the
-    // letters. The previous y=25..29 probes landed on white menu text.
-    // DATA uses violet; GAME uses cream/gold at these same locations.
+    // Regression verified against frames of the user's 1680x720 Android
+    // recording, reconstructed to 240x160. The old right x=237 probe hit
+    // an orange antialiased border pixel (green ≈115), and top y=2 hit a
+    // dark-red edge (red ≈199): red_frame() rejected BOTH real menus.
+    // These four pixels are solid interior-red portions of the border.
+    if (!red_frame(p,w,3,70) || !red_frame(p,w,238,70) ||
+        !red_frame(p,w,30,3) || !red_frame(p,w,30,157)) return {};
+    // The previous DATA predicate required blue > red+13. The actual
+    // purple title at y=15 is dark magenta (roughly 106,22,70): blue
+    // exceeds green but NOT red. GAME title is brown/gold (~150,70,11).
+    // Use component relationships anchored to the *real* samples, with
+    // tolerance for capture scaling/gradients; require 3/4 matches.
     constexpr unsigned xx[4]={80,95,125,150};
     constexpr unsigned yy[4]={15,15,15,15};
     unsigned violet=0, cream=0;
     for(int k=0;k<4;k++) {
         const std::size_t i=(std::size_t(yy[k])*w+xx[k])*3;
         const int r=p[i],g=p[i+1],b=p[i+2];
-        violet += b>r+13 && b>g+28;
-        cream += r>b+40 && g>b+15;
+        violet += r>=65 && r<=165 && g<115 && b>=45 && b>=g+20;
+        cream += r>=125 && g>=40 && b<60 &&
+                 r>=g+35 && g>=b+18;
     }
     Scene scene=violet>=3 ? Scene::Data : cream>=3 ? Scene::Game : Scene::None;
     if(scene==Scene::None) return {};
