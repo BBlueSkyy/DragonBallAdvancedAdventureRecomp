@@ -3,6 +3,7 @@
 #include "mobile_platform.h"
 #include "runtime.h"
 #include "game_launcher_boot.h"
+#include "dragonball_special_meter.h"
 
 #ifndef GBARECOMP_BUILTIN_NAME
 #define GBARECOMP_BUILTIN_NAME "Dragon Ball: Advanced Adventure"
@@ -37,6 +38,10 @@ static int game_main(int argc, char** argv) {
   options.launcher_expose_gyro = false;
 #if defined(__ANDROID__)
   options.ui_touch_friendly = true;
+  // Four independent buttons: A = jump, B = punch, L = Power Pole,
+  // R = Ki/Kamehameha. Read-only guest image probe controls blue glow.
+  options.mobile_action_hud = true;
+  options.mobile_special_meter_probe = dragonball::special_meter_fill;
 #endif
   if (game_launcher_preboot(args, options)) return 0;
   std::vector<char*> native_args;
