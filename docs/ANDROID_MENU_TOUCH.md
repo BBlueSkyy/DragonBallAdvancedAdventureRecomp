@@ -27,3 +27,25 @@ The observed RGB thresholds and button positions were checked against the user's
 Device acceptance: from GAME MENU tap STORY and OPTION; in DATA MENU tap an unselected DATA slot and verify it really navigates there, tap a selected slot and the RETURN label; try blank-space advance and gestures over existing virtual buttons. Then enter gameplay: taps in the stage should **not** trigger menu confirmation or random movement, and HALT-fixed performance should remain fluid. Check touch after a save/load and after returning to either menu.
 
 **Validation achieved:** independently sampled video frames confirm the old border test fails (false/false), the new four border samples pass (true/true/true/true) on DATA and GAME screens, and the corrected GAME label score selects STORY instead of OPTION. Code-level regression tests now exercise black corners, each menu choice, blank-space advance and cancellation. **Pending:** ROM-free C++ test execution, Android APK compile and Moto G100 visual/functional validation. Avoid merging this Draft until those pass.
+## Follow-up: Android taps still not responding (27 Oct 2026)
+
+After the color/selection classifier fix, the owner reported that tapping the
+game image still did not advance. Comparing the TouchHub Android event route
+with `menu_input_frame` revealed that the policy **only consumed the
+post-release `GestureKind::Tap`**. SDL touch is first delivered as a raw
+`TouchEvent::Down`, then `Move`/`Up` and possibly a synthesized gesture.
+The callback now consumes **the initial Down event** when a confirmed DATA/GAME
+menu is visible, avoiding dependence on release timing or gesture recognition.
+If a testing client provides only an explicit Tap gesture and no raw events,
+the prior gesture path remains supported. An Up or Move is never a new
+confirmation. One press still emits a bounded 2-frame held / 2-frame released
+KEYINPUT sequence, cancelled on a scene transition. The guest, IRQ/SWI,
+HALT timing and touch-pad hitboxes are unchanged.
+
+`tests/menu_touch_test.cpp` now includes raw Down, ignored Up/Move, another
+menu item (Down→Right→A), hidden-menu and out-of-view guards, and the earlier
+gesture-only tests. **These are source-level additions, not a completed
+Android test run.** The menu-probe pixels were checked using captured video
+frames, but the SDK event-to-guest path and actual touch response are still
+pending real-device confirmation. No claim of confirmed fix until the next
+APK is tested on Moto G100.
