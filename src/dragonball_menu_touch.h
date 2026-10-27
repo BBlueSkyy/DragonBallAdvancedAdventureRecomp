@@ -157,12 +157,34 @@ inline std::uint16_t menu_input_frame(const gbarecomp::TouchFrameInfo* f) {
     // Do not generate A/B or navigation until the highlight is visible:
     // transition/fade frames can briefly retain the menu banner.
     if(o.scene==Scene::None || o.selected<0) return 0x03FFu;
-    for(std::size_t i=0;i<f->gesture_count;i++) {
-        const auto& g=f->gestures[i];
-        if(g.kind!=gbarecomp::GestureKind::Tap ||
-           g.fingers!=1 || !g.start_in_view) continue;
-        const float x=g.view_x-static_cast<float>(f->extra_left);
-        const float y=g.view_y-static_cast<float>(f->extra_top);
+    // On a phone, SDL FINGERDOWN is routed as TouchEvent::Down; no gesture
+    // has to complete before selecting a visible menu item. Previously this
+    // code only consumed GestureKind::Tap on FINGERUP, making a tap dependent
+    // on recognition/release timing and causing some Android taps to be lost.
+    // Prefer the raw Down stream. Gestures are a fallback for clients that
+    // supply a synthetic Tap without corresponding finger events.
+    const bool has_events = f->event_count != 0;
+    const std::size_t n = has_events ? f->event_count : f->gesture_count;
+    for(std::size_t i=0;i<n;i++) {
+        float view_x=0.0f, view_y=0.0f;
+        bool inside=false;
+        if(has_events) {
+            const auto& e=f->events[i];
+            if(e.phase!=gbarecomp::TouchPhase::Down) continue;
+            view_x=e.view_x;
+            view_y=e.view_y;
+            inside=e.in_view;
+        } else {
+            const auto& g=f->gestures[i];
+            if(g.kind!=gbarecomp::GestureKind::Tap ||
+               g.fingers!=1) continue;
+            view_x=g.view_x;
+            view_y=g.view_y;
+            inside=g.start_in_view;
+        }
+        if(!inside) continue;
+        const float x=view_x-static_cast<float>(f->extra_left);
+        const float y=view_y-static_cast<float>(f->extra_top);
         if(x<0||y<0||x>=240||y>=160) continue;
         pending.clear();
         pending.scene=o.scene;
