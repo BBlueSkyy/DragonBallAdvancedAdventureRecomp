@@ -14,8 +14,10 @@ inline float special_meter_fill(const std::uint8_t* rgb,
     if (!rgb || width != 240 || height != 160) return -1.0f;
     // Center of the colored horizontal Ki gauge, skipping left kanji and
     // right frame. Coordinates are native guest pixels, *not* Android pixels.
+    // Calibrated against the native-scaled stage screenshot: x24..39 is
+    // colored charge, x40..42 stays pale until full; y151 is dark edging.
     constexpr int x_begin = 25, x_end = 42;
-    constexpr int ys[3] = {142, 143, 144};
+    constexpr int ys[3] = {146, 147, 148};
     unsigned filled = 0, samples = 0;
     for (int x = x_begin; x <= x_end; ++x) {
         int vote = 0;
@@ -32,7 +34,7 @@ inline float special_meter_fill(const std::uint8_t* rgb,
     // scenery patch alone must not automatically trigger an active special.
     unsigned dark = 0;
     for (int x = x_begin; x <= x_end; x += 3) {
-        constexpr int y = 148;
+        constexpr int y = 151;
         const auto* p = rgb + (y * width + x) * 3u;
         if (p[0] < 100 && p[1] < 100 && p[2] < 100) ++dark;
     }
