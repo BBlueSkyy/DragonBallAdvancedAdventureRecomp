@@ -51,8 +51,11 @@ inline Observation classify(const std::uint8_t* p, unsigned w, unsigned h) {
     }
     Scene scene=violet>=3 ? Scene::Data : cream>=3 ? Scene::Game : Scene::None;
     if(scene==Scene::None) return {};
+    // DATA labels have a gold/brown border, also present on inactive
+    // rows. Count only the bright-red selected label ink inside its text,
+    // never the frame/border (verified on both menu frames in the video).
     static constexpr unsigned data_box[3][4]={
-        {49,53,94,70},{49,84,94,102},{49,117,94,135}
+        {52,55,90,68},{52,86,90,100},{52,119,90,133}
     };
     static constexpr unsigned game_box[4][4]={
         {45,62,110,77},{130,62,212,77},
@@ -62,7 +65,16 @@ inline Observation classify(const std::uint8_t* p, unsigned w, unsigned h) {
     const unsigned n=scene==Scene::Data?3:4;
     for(unsigned k=0;k<n;k++) {
         const unsigned* r=scene==Scene::Data?data_box[k]:game_box[k];
-        unsigned score=score_red_ink(p,w,r[0],r[1],r[2],r[3]);
+        unsigned score=0;
+        if(scene==Scene::Data) {
+            for(unsigned y=r[1];y<r[3];++y)
+                for(unsigned x=r[0];x<r[2];++x) {
+                    const auto j=(std::size_t(y)*w+x)*3;
+                    const unsigned red=p[j],green=p[j+1],blue=p[j+2];
+                    if(red>175 && green<110 && blue<90 &&
+                       red>green*1.8f) ++score;
+                }
+        } else score=score_red_ink(p,w,r[0],r[1],r[2],r[3]);
         if(score>best_score){best_score=score;best=int(k);}
     }
     // Avoid steering towards an invented selection on fades/animations.
