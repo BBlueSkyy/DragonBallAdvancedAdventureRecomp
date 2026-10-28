@@ -1,187 +1,42 @@
-// Standalone ROM-free tests of the Android Data/Game menu touch policy.
-// c++ -std=c++20 -Igbarecomp/src/runtime tests/menu_touch_test.cpp -o /tmp/menu_touch_test
-// /tmp/menu_touch_test
+// Fast policy checks; actual SDL/TouchHub/VBlank/ARM read coverage lives in
+// menu_runtime_delivery_test.cpp. Recorded title/selection provenance is in
+// recorded_menu_frames.h; no ROM, BIOS or invented game-state addresses.
 #include "../src/dragonball_menu_touch.h"
-#include <array>
+#include "recorded_menu_frames.h"
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <cstdio>
-
 using namespace dragonball::menu_touch;
-constexpr unsigned W=240,H=160;
-using Frame=std::array<std::uint8_t,W*H*3>;
-void pixel(Frame& im,unsigned x,unsigned y,unsigned r,unsigned g,unsigned b) {
-    const auto k=(std::size_t(y)*W+x)*3;
-    im[k]=std::uint8_t(r);im[k+1]=std::uint8_t(g);im[k+2]=std::uint8_t(b);
-}
-Frame menu(Scene scene,int selected) {
-    Frame f{};
-    // Raw color relationships reconstructed from the owner's recorded
-    // Android menus, *not* placeholder pure red/blue/gold fixtures.
-    // Old border tests incorrectly sampled antialiased/dark positions.
-    pixel(f,2,70,236,9,3);
-    pixel(f,237,70,255,115,85); // NOT bright red under red_frame()
-    pixel(f,30,2,199,19,18);    // NOT bright red under red_frame()
-    pixel(f,3,70,253,0,0);
-    pixel(f,238,70,250,1,0);
-    pixel(f,30,3,252,3,0);
-    pixel(f,30,157,253,1,0);
-    constexpr unsigned xx[4]={80,95,125,150}, yy[4]={15,15,15,15};
-    for(unsigned k=0;k<4;k++)
-        if(scene==Scene::Data)pixel(f,xx[k],yy[k],106,22,70);
-        else pixel(f,xx[k],yy[k],150,70,11);
-    if(scene==Scene::Data) {
-        constexpr unsigned y[3]={53,84,117};
-        for(unsigned i=0;i<3;i++)
-            if(int(i)==selected)
-                for(unsigned j=y[i];j<y[i]+5;j++)
-                    for(unsigned x=54;x<74;x++)pixel(f,x,j,230,44,26);
-    }else if(scene==Scene::Game) {
-        constexpr unsigned x[4]={52,143,52,143}, y[4]={67,67,110,110};
-        for(unsigned i=0;i<4;i++)
-            if(int(i)==selected)
-                for(unsigned yy=y[i];yy<y[i]+5;yy++)
-                    for(unsigned xx=x[i];xx<x[i]+21;xx++)pixel(f,xx,yy,90,18,20);
-    }
-    return f;
-}
-gbarecomp::Gesture tap(float x,float y) {
-    gbarecomp::Gesture g{};
-    g.kind=gbarecomp::GestureKind::Tap;
-    g.start_in_view=true;
-    g.view_x=x;g.view_y=y;g.fingers=1;
-    return g;
-}
-std::uint16_t touch(float x,float y) {
-    auto g=tap(x,y);
-    gbarecomp::TouchFrameInfo frame{};
-    frame.gestures=&g;frame.gesture_count=1;
-    return menu_input_frame(&frame);
-}
-std::uint16_t idle() {
-    gbarecomp::TouchFrameInfo f{};
-    return menu_input_frame(&f);
-}
-std::uint16_t raw_touch(gbarecomp::TouchPhase phase,float x,float y,
-                        bool in_view=true) {
-    gbarecomp::TouchEvent e{};
-    e.phase=phase;
-    e.view_x=x;
-    e.view_y=y;
-    e.in_view=in_view;
-    gbarecomp::TouchFrameInfo f{};
-    f.events=&e;
-    f.event_count=1;
-    return menu_input_frame(&f);
-}
-int main() {
-    constexpr auto A=std::uint16_t(0x3fe),B=std::uint16_t(0x3fd);
-    constexpr auto DOWN=std::uint16_t(0x37f);
-    constexpr auto RIGHT=std::uint16_t(0x3ef);
-    constexpr auto neutral=std::uint16_t(0x3ff);
-
-    const Frame data=menu(Scene::Data,0);
-    assert(classify(data.data(),W,H).scene==Scene::Data);
-    assert(classify(data.data(),W,H).selected==0);
-    assert(classify(data.data(),W,159).scene==Scene::None);
-    // Recorded frame reproduces the previously untested failure: old
-    // x=237 and top y=2 probes are not bright-red, DATA's title is
-    // red-magenta (blue<red), and the game must still recognize both.
-    assert(!red_frame(data.data(),W,237,70));
-    assert(!red_frame(data.data(),W,30,2));
-    auto no_border=data;pixel(no_border,3,70,0,0,0);
-    assert(classify(no_border.data(),W,H).scene==Scene::None);
-    const Frame other_data=menu(Scene::Data,2);
-    assert(classify(other_data.data(),W,H).selected==2);
-    const Frame game=menu(Scene::Game,0);
-    assert(classify(game.data(),W,H).scene==Scene::Game);
-    assert(classify(game.data(),W,H).selected==0);
-    for (int i=0;i<4;++i)
-        assert(classify(menu(Scene::Game,i).data(),W,H).selected==i);
-    for (int i=0;i<3;++i)
-        assert(classify(menu(Scene::Data,i).data(),W,H).selected==i);
-    // Regression: the old two probes are intentionally dark even though
-    // both real menus have the full bright red perimeter.
-    assert(!red_frame(data.data(),W,5,6));
-    assert(!red_frame(data.data(),W,230,154));
-    assert(hit_target(Scene::Data,99,97)==1);
-    assert(hit_target(Scene::Game,155,113)==3);
-
-    observe_menu_frame(nullptr,0,0);
-    assert(touch(99,96)==neutral); // no accidental gameplay A
-    const Frame fading_data=menu(Scene::Data,-1);
-    observe_menu_frame(fading_data.data(),W,H);
-    assert(touch(90,96)==neutral); // no arbitrary data slot during fade
-    assert(touch(200,36)==neutral); // RETURN must not fire in ambiguous fade
-    observe_menu_frame(data.data(),W,H);
-    assert(touch(99,96)==DOWN); // tap DATA2 from selected DATA1
-    assert(idle()==DOWN);
-    assert(idle()==neutral);
-    assert(idle()==neutral);
-    assert(idle()==A);
-    assert(idle()==A);
-    assert(idle()==neutral);
-    assert(idle()==neutral);
-    assert(idle()==neutral);
-
-    observe_menu_frame(game.data(),W,H);
-    assert(touch(165,110)==DOWN);  // STORY -> OPTION: down then right
-    assert(idle()==DOWN);
-    assert(idle()==neutral);assert(idle()==neutral);
-    assert(idle()==RIGHT);assert(idle()==RIGHT);
-    assert(idle()==neutral);assert(idle()==neutral);
-    assert(idle()==A);assert(idle()==A);
-    assert(idle()==neutral);assert(idle()==neutral);
-    observe_menu_frame(game.data(),W,H);
-    assert(touch(200,36)==B); // RETURN area
-    observe_menu_frame(nullptr,0,0);
-    assert(idle()==neutral); // queued keys cancelled when gameplay begins
-    assert(touch(90,65)==neutral);
-
-    observe_menu_frame(game.data(),W,H);
-    assert(touch(20,125)==A); // blank-space touch confirms current selection
-    for(int i=0;i<3;++i)idle();
-    observe_menu_frame(game.data(),W,H);
-    assert(touch(78,70)==A); // tap currently highlighted STORY
-    // Production Android path: Down arrives before any recognized Tap.
-    observe_menu_frame(nullptr,0,0);
-    assert(idle()==neutral); // flush previous sequence on scene change
-    observe_menu_frame(game.data(),W,H);
-    assert(raw_touch(gbarecomp::TouchPhase::Down,78,70)==A);
-    assert(idle()==A);
-    assert(idle()==neutral);assert(idle()==neutral);
-    // The release/gesture of the same finger must NOT confirm again.
-    assert(raw_touch(gbarecomp::TouchPhase::Up,78,70)==neutral);
-    assert(raw_touch(gbarecomp::TouchPhase::Move,78,70)==neutral);
-    // A touch to an inactive option plans the direction and confirmation.
-    assert(raw_touch(gbarecomp::TouchPhase::Down,166,110)==DOWN);
-    assert(idle()==DOWN);
-    assert(idle()==neutral);assert(idle()==neutral);
-    assert(idle()==RIGHT);assert(idle()==RIGHT);
-    assert(idle()==neutral);assert(idle()==neutral);
-    assert(idle()==A);assert(idle()==A);
-    assert(idle()==neutral);assert(idle()==neutral);
-    // A long hold is owned by this port (the runtime settings shortcut
-    // must not run); the menu policy only reacts once on the original Down.
-    observe_menu_frame(data.data(),W,H);
-    assert(raw_touch(gbarecomp::TouchPhase::Down,98,65)==A);
-    assert(idle()==A);assert(idle()==neutral);assert(idle()==neutral);
-    for(int k=0;k<60;++k) {
-        assert(raw_touch(gbarecomp::TouchPhase::Move,98,65)==neutral);
-    }
-    gbarecomp::Gesture held_gesture{};
-    held_gesture.kind=gbarecomp::GestureKind::LongPress;
-    held_gesture.start_in_view=true;
-    held_gesture.view_x=98;held_gesture.view_y=65;held_gesture.fingers=1;
-    gbarecomp::TouchFrameInfo held_frame{};
-    held_frame.gestures=&held_gesture;held_frame.gesture_count=1;
-    assert(menu_input_frame(&held_frame)==neutral);
-    assert(raw_touch(gbarecomp::TouchPhase::Up,98,65)==neutral);
-
-    // No touch-generated action outside the recognized menu.
-    observe_menu_frame(nullptr,0,0);
-    assert(raw_touch(gbarecomp::TouchPhase::Down,78,70)==neutral);
-    // Out-of-view touch cannot change the in-game menu.
-    observe_menu_frame(game.data(),W,H);
-    assert(raw_touch(gbarecomp::TouchPhase::Down,78,70,false)==neutral);
-    std::puts("menu touch: DATA/GAME, SDL Down, ignored Up/Move, VBlank pulses, return, scene guard OK");
+constexpr uint16_t neutral=0x3ff,A=0x3fe,B=0x3fd,DOWN=0x37f,UP=0x3bf,RIGHT=0x3ef,LEFT=0x3df;
+uint16_t frame(Observation o,const gbarecomp::TouchEvent* e=nullptr,uint16_t host=neutral){observed.store(pack(o));gbarecomp::TouchFrameInfo f{};f.events=e;f.event_count=e?1:0;f.host_keyinput=host;return menu_input_frame(&f);}
+gbarecomp::TouchEvent down(float x,float y){gbarecomp::TouchEvent e{};e.phase=gbarecomp::TouchPhase::Down;e.in_view=true;e.view_x=x;e.view_y=y;return e;}
+int main(){
+ for(auto scene:{Scene::Data,Scene::Game,Scene::Pause}) {
+  const auto im=scene==Scene::Data?recorded::frame(recorded::Data):scene==Scene::Game?recorded::frame(recorded::Game):recorded::frame(recorded::Pause);
+  auto o=classify(im.data(),240,160);assert(o.scene==scene);assert(o.selected==(scene==Scene::Pause?1:0));
+ }
+ for(auto scene:{Scene::Data,Scene::Game,Scene::Pause}) {
+  const int count=scene==Scene::Data?3:scene==Scene::Game?4:2;
+  for(int start=0;start<count;++start)for(int target=0;target<count;++target){
+   pending.clear();Observation o{scene,start};auto e=down(scene==Scene::Game?(target%2?165:78):120,scene==Scene::Data?60+32*target:scene==Scene::Game?(target/2?110:70):(target?68:60));
+   auto k=frame(o,&e);unsigned guard=0;
+   while(o.selected!=target && ++guard<4){
+    assert(k==DOWN||k==UP||k==RIGHT||k==LEFT);assert(frame(o)==k);assert(frame(o)==neutral);assert(frame(o)==neutral);assert(frame(o)==neutral);
+    o.selected+=(k==DOWN?scene==Scene::Game?2:1:k==UP?scene==Scene::Game?-2:-1:k==RIGHT?1:-1);k=frame(o);
+   }
+   assert(guard<4);assert(k==A);assert(frame(o)==A);for(int i=0;i<3;++i)assert(frame(o)==neutral);
+  }
+ }
+ pending.clear();Observation o{Scene::Game,3};auto ret=down(200,36);assert(frame(o,&ret)==B);assert(frame(o)==B);assert(frame({})==neutral);
+ for(int target=0;target<2;++target){pending.clear();Observation p{Scene::Pause,1};auto e=down(120,target?68:60);auto k=frame(p,&e);if(target==0){assert(k==UP);assert(frame(p)==UP);assert(frame(p)==neutral);assert(frame(p)==neutral);p.selected=0;k=frame(p);}assert(k==A);assert(frame({})==neutral);}
+ pending.clear();auto e=down(100,95);assert(frame({Scene::Data,0},&e)==DOWN);for(int i=0;i<40;++i)assert(frame({Scene::Data,0})!=A);assert(pending.scene==Scene::None);
+ assert(frame({Scene::Data,0},&e)==DOWN);assert(frame({Scene::Data,-1})==neutral);assert(pending.scene==Scene::None);
+ assert(frame({Scene::Data,0},&e,LEFT)==neutral);assert(frame({},&e)==neutral);
+ auto blank=down(20,125);assert(frame({Scene::Game,0},&blank)==neutral);
+ auto held=down(78,70);assert(frame({Scene::Game,0},&held)==A);assert(frame({Scene::Game,0})==A);for(int i=0;i<80;++i){held.phase=gbarecomp::TouchPhase::Move;assert(frame({Scene::Game,0},&held)==neutral);}held.phase=gbarecomp::TouchPhase::Up;assert(frame({Scene::Game,0},&held)==neutral);
+ pending.clear();auto start=down(100,95);assert(frame({Scene::Data,0},&start)==DOWN);
+ auto cancel=start;cancel.phase=gbarecomp::TouchPhase::Cancel;assert(frame({Scene::Data,0},&cancel)==neutral);assert(pending.scene==Scene::None);
+ std::puts("menu touch: recorded DATA/GAME/PAUSE, acknowledged selection, timeout/fade/physical cancellation, held touch PASS");
 }
