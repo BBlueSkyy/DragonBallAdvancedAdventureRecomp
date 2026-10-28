@@ -1,3 +1,5 @@
+> Previous delivery-stage report. See [the navigation follow-up](MOBILE_NAVIGATION_FOLLOWUP.md) for current PRESS START, HUD and video findings.
+
 # Menu touch delivery, staged continuation of PR8
 
 Base game `ce33ba4a807e8486810a734ba97ba2c781ad79ff`, companion engine PR11

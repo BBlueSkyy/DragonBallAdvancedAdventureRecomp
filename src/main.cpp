@@ -43,7 +43,8 @@ static int game_main(int argc, char** argv) {
   // R = Ki/Kamehameha. Read-only guest image probe controls blue glow.
   options.mobile_action_hud = true;
   options.mobile_special_meter_probe = dragonball::special_meter_fill;
-  // Tap DATA/GAME/PAUSE choices; confirm only after the target is observed.
+  // Tap PRESS START and DATA/GAME/PAUSE choices; explicit BACK is
+  // context-gated. OPTION/COLLECTION preserve their original GBA pages.
   // Gameplay is unchanged: unrecognized scenes synthesize no keys.
   options.mobile_menu_frame_probe = dragonball::menu_touch::observe_menu_frame;
   options.input_frame = dragonball::menu_touch::menu_input_frame;

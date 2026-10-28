@@ -2,6 +2,7 @@
 // authored ARM LDRH consumer. This does not execute the private game's menu code.
 #include "../src/dragonball_menu_touch.h"
 #include "recorded_menu_frames.h"
+#include "recorded_followup_frames.h"
 #include "host_window.h"
 #include "runtime.h"
 #include "runtime_arm.h"
@@ -37,7 +38,7 @@ int main(){
  opts.touch_gesture_claims=gbarecomp::kTouchClaimTap|gbarecomp::kTouchClaimLongPress;
  win.configure_touch(true,opts.touch_gesture_claims,1,false);win.configure_mobile_action_hud(true,nullptr);
  win.set_mobile_menu_frame_probe(opts.mobile_menu_frame_probe);
- unsigned vblanks=0,down_events=0,up_events=0,a_edges=0,b_edges=0;uint16_t previous=0;
+ unsigned vblanks=0,down_events=0,up_events=0,a_edges=0,b_edges=0,start_edges=0,select_edges=0;uint16_t previous=0;
  Observation state{};
  // Authored guest instruction reads the emulated register, not the policy's
  // return value. The test navigation model consumes its active-low key edges.
@@ -55,7 +56,7 @@ int main(){
   bus->io().set_synthesized_keyinput(opts.input_frame(&info));
   const auto read=guest_read();check(read==bus->io().composed_keyinput(),"ARM sees composed KEYINPUT, including traditional controls");
   const uint16_t held=uint16_t(~read)&0x3ff,edge=held&~previous;previous=held;
-  a_edges+=bool(edge&1);b_edges+=bool(edge&2);
+  a_edges+=bool(edge&1);b_edges+=bool(edge&2);start_edges+=bool(edge&8);select_edges+=bool(edge&4);
   if(state.scene==Scene::Game){if(edge&(1<<7))state.selected|=2;if(edge&(1<<6))state.selected&=1;if(edge&(1<<4))state.selected|=1;if(edge&(1<<5))state.selected&=2;}
   else if(state.scene!=Scene::None){if(edge&(1<<7))++state.selected;if(edge&(1<<6))--state.selected;}
   observed.store(pack(state));
@@ -92,6 +93,74 @@ int main(){
  hub.advance(gbarecomp::touch_clock_ms()+1000);check(hub.take_host_actions().empty(),"claimed LongPress produces no host settings shortcut");
  event(SDL_FINGERUP,78,70);for(int i=0;i<8;++i)next_frame();check(a_edges==firstA+1,"long hold/release cannot double confirm");
  state={};observed.store(0);pending.clear();firstA=a_edges;event(SDL_FINGERDOWN,100,95);event(SDL_FINGERUP,100,95);for(int i=0;i<8;++i)next_frame();check(a_edges==firstA,"no synthesized menu action in gameplay");
+ // New navigation controls use real SDL edges, including taps shorter than
+ // one VBlank. The authored ARM consumer checks START bit 3 and B bit 1.
+ auto nav_event=[&](Uint32 type,bool play,int id=29){const auto p=hub.presentation();const float mm=win.px_per_mm();
+  SDL_Event e{};e.type=type;e.tfinger.type=type;e.tfinger.touchId=17;e.tfinger.fingerId=id;
+  e.tfinger.x=(p.drawable_width*.5f+(play?9.f:-9.f)*mm)/p.drawable_width;
+  e.tfinger.y=(p.drawable_height-7.f*mm)/p.drawable_height;
+  check(SDL_PushEvent(&e)==1,"queue HUD navigation edge");const auto out=win.pump();bus->io().set_keyinput(out.keyinput);
+ };
+ for(auto size:{std::pair{2520,1080},std::pair{1920,1080},std::pair{1080,2400}}){
+  SDL_SetWindowSize(window,size.first,size.second);
+  auto title=recorded::frame(recorded::Press);win.present(title.data());state=unpack(observed.load());pending.clear();previous=0;
+  auto before=start_edges;auto beforeA=a_edges;event(SDL_FINGERDOWN,120,120);event(SDL_FINGERUP,120,120);for(int f=0;f<10;++f)next_frame();
+  check(start_edges==before+1&&a_edges==beforeA,"direct PRESS START reaches ARM as one START, never A");
+  for(auto which:{0,1,2,3,4,5,6}){
+   auto image=which==1?recorded::frame(recorded::Press):which==2?recorded::frame(recorded::Data):which==3?recorded::frame(recorded::Game):which==4?recorded::frame(recorded::Pause):which==5?recorded::frame(recorded::Option):which==6?recorded::frame(recorded::Collection):recorded::Frame{};
+   win.present(image.data());state=unpack(observed.load());pending.clear();previous=0;
+   before=start_edges;beforeA=a_edges;auto beforeB=b_edges;
+   nav_event(SDL_FINGERDOWN,true);nav_event(SDL_FINGERUP,true);for(int f=0;f<10;++f)next_frame();
+   check(start_edges==before+1&&a_edges==beforeA&&b_edges==beforeB,"PLAY delivers only START on every known/unknown screen");
+   pending.clear();previous=0;beforeB=b_edges;
+   nav_event(SDL_FINGERDOWN,false);nav_event(SDL_FINGERUP,false);for(int f=0;f<10;++f)next_frame();
+   check(b_edges==beforeB+(which>=2?1:0),"BACK is B only in recognized cancel contexts, inert in gameplay/title");
+   check(select_edges==0,"Dragon Ball HUD never asserts SELECT");
+  }
+ }
+ // Long hold cannot repeat a navigation edge or trigger host settings.
+ pending.clear();state={};observed.store(0);previous=0;auto beforeStart=start_edges;
+ nav_event(SDL_FINGERDOWN,true);for(int f=0;f<60;++f)next_frame();hub.advance(gbarecomp::touch_clock_ms()+1000);
+ check(hub.take_host_actions().empty(),"HUD PLAY hold cannot become LongPress settings");
+ nav_event(SDL_FINGERUP,true);for(int f=0;f<10;++f)next_frame();check(start_edges==beforeStart+1,"held PLAY sends a single bounded START edge");
+ // Consecutive taps arrive on adjacent VBlanks, not ten frames apart.
+ win.present(im.data());state=unpack(observed.load());pending.clear();navigation.clear();previous=0;
+ auto baseStart=start_edges,baseBack=b_edges;
+ nav_event(SDL_FINGERDOWN,true);nav_event(SDL_FINGERUP,true);next_frame();
+ nav_event(SDL_FINGERDOWN,false);nav_event(SDL_FINGERUP,false);next_frame();
+ for(int f=0;f<6;++f)next_frame();
+ check(start_edges==baseStart+1&&b_edges==baseBack+1,"rapid PLAY then BACK survives both SDL drains as distinct ARM edges");
+ baseBack=b_edges;
+ nav_event(SDL_FINGERDOWN,false);nav_event(SDL_FINGERUP,false);next_frame();
+ nav_event(SDL_FINGERDOWN,false);nav_event(SDL_FINGERUP,false);next_frame();
+ for(int f=0;f<6;++f)next_frame();
+ check(b_edges==baseBack+2,"rapid BACK taps keep the intervening releases at ARM KEYINPUT");
+ baseBack=b_edges;
+ nav_event(SDL_FINGERDOWN,true);nav_event(SDL_FINGERUP,true);next_frame();
+ nav_event(SDL_FINGERDOWN,false);nav_event(SDL_FINGERUP,false);next_frame();
+ state={};observed.store(0);for(int f=0;f<8;++f)next_frame();
+ check(b_edges==baseBack,"queued BACK cannot leak into gameplay after scene changes");
+ // Runtime focus/lifecycle cancellation must invalidate already-drained HUD
+ // pulses too; their short tap may no longer have a live finger to cancel.
+ win.present(im.data());state=unpack(observed.load());pending.clear();navigation.clear();previous=0;baseBack=b_edges;
+ nav_event(SDL_FINGERDOWN,true);nav_event(SDL_FINGERUP,true);next_frame();
+ nav_event(SDL_FINGERDOWN,false);nav_event(SDL_FINGERUP,false);
+ SDL_Event foreground{};foreground.type=SDL_APP_DIDENTERFOREGROUND;SDL_PushEvent(&foreground);
+ check(win.wait_for_foreground(),"exercise real host suspend/resume cancellation");
+ for(int f=0;f<8;++f)next_frame();
+ check(b_edges==baseBack&&guest_read()==0x3ff,"no queued navigation survives host suspension");
+ // Existing multitouch owns its fingers even when a finger slides into BACK.
+ SDL_SetWindowSize(window,2520,1080);win.present(im.data());state={};observed.store(0);pending.clear();previous=0;
+ // 96dpi physical geometry: left D-pad right/down diagonal and punch at right.
+ auto finger=[&](Uint32 type,float x,float y,int id){const auto p=hub.presentation();SDL_Event e{};e.type=type;e.tfinger.type=type;e.tfinger.touchId=17;e.tfinger.fingerId=id;e.tfinger.x=x/p.drawable_width;e.tfinger.y=y/p.drawable_height;SDL_PushEvent(&e);const auto out=win.pump();bus->io().set_keyinput(out.keyinput);return out.keyinput;};
+ const auto mm=win.px_per_mm();const float arm=11.5f*mm;
+ finger(SDL_FINGERDOWN,225+arm*.7f,1080-4*mm-arm-6*mm+arm*.7f,41);
+ finger(SDL_FINGERDOWN,2295,740,42);next_frame();check((guest_read()&0x92)==0,"multitouch preserves DOWN+RIGHT+punch at ARM KEYINPUT");
+ const auto beforePlay=start_edges;
+ nav_event(SDL_FINGERDOWN,true);nav_event(SDL_FINGERUP,true);next_frame();
+ check((guest_read()&0x9a)==0&&start_edges==beforePlay+1,"PLAY composes with held diagonal and punch without replacing them");
+ for(int f=0;f<4;++f)next_frame();
+ finger(SDL_FINGERUP,2295,740,42);finger(SDL_FINGERUP,225,999,41);next_frame();check(guest_read()==0x3ff,"all multitouch releases are neutral");
  runtime_set_vblank_input_hook(nullptr);runtime_shutdown();gbarecomp::set_active_bus(nullptr);gbarecomp::set_active_ppu(nullptr);win.close();
  std::printf("SDL/TouchHub/VBlank/KEYINPUT/ARM: %u callbacks, %u Downs, %u Ups; %d failures\n",vblanks,down_events,up_events,failures);return failures?1:0;
 }

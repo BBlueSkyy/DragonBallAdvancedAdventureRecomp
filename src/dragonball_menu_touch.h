@@ -12,7 +12,7 @@
 
 namespace dragonball::menu_touch {
 
-enum class Scene : std::uint8_t { None = 0, Data = 1, Game = 2, Pause = 3 };
+enum class Scene : std::uint8_t { None = 0, Data = 1, Game = 2, Pause = 3, Title = 4, Option = 5, Collection = 6 };
 struct Observation {
     Scene scene = Scene::None;
     int selected = -1;
@@ -44,7 +44,15 @@ inline Observation classify(const std::uint8_t* p, unsigned w, unsigned h) {
     const bool data=glyph::matches(p,w,80,22,80,11,false,glyph::Data);
     const bool game=glyph::matches(p,w,80,22,80,11,false,glyph::Game);
     const bool pause=glyph::matches(p,w,108,48,29,7,true,glyph::Pause);
-    if(unsigned(data)+unsigned(game)+unsigned(pause)!=1) return {};
+    const bool title=glyph::matches(p,w,76,112,88,16,false,glyph::Press);
+    const bool option=glyph::matches(p,w,80,22,80,11,false,glyph::Option);
+    const bool collection=glyph::matches(p,w,72,20,98,13,false,glyph::Collection);
+    if(unsigned(data)+unsigned(game)+unsigned(pause)+unsigned(title)+unsigned(option)+unsigned(collection)!=1) return {};
+    if(title)return {Scene::Title,0};
+    // Only the explicit RETURN/B path is qualified for these video screens.
+    // Never infer the collection grid, erase-save action, or unseen map hits.
+    if(option)return {Scene::Option,-1};
+    if(collection)return {Scene::Collection,-1};
     Scene scene=data?Scene::Data:game?Scene::Game:Scene::Pause;
     if(pause) {
         unsigned lo=255,hi=0;
@@ -141,7 +149,7 @@ struct Plan {
 };
 inline Plan pending{};
 inline std::uint16_t advance_plan(Observation o) {
-    if(pending.scene!=o.scene || o.selected<0){pending.clear();return 0x03ff;}
+    if(pending.scene!=o.scene || (o.selected<0 && pending.target!=-2)){pending.clear();return 0x03ff;}
     if(pending.pos<pending.count) return pending.frames[pending.pos++];
     if(pending.finishing){pending.clear();return 0x03ff;}
     if(pending.waiting) {
@@ -151,7 +159,8 @@ inline std::uint16_t advance_plan(Observation o) {
         }
         pending.waiting=false;pending.waited=0;
     }
-    if(pending.target==-2) {pending.press(1);pending.finishing=true;}
+    if(pending.target==-3) {pending.press(3);pending.finishing=true;}
+    else if(pending.target==-2) {pending.press(1);pending.finishing=true;}
     else if(pending.target==o.selected) {pending.press(0);pending.finishing=true;}
     else {
         unsigned bit;int expected=o.selected;
@@ -166,28 +175,61 @@ inline std::uint16_t advance_plan(Observation o) {
     }
     return pending.frames[pending.pos++];
 }
+inline bool can_back(Scene s) {
+    return s==Scene::Data||s==Scene::Game||s==Scene::Pause||s==Scene::Option||s==Scene::Collection;
+}
+// Fixed FIFO preserves rapid distinct HUD taps and their two release frames.
+// A queued BACK is bound to the recognized screen at Down, never gameplay.
+struct Navigation {
+    struct Request {gbarecomp::TouchControl control;Scene scene;};
+    std::array<Request,4> queue{};
+    unsigned count=0,pos=0;
+    void clear(){*this=Navigation{};}
+    void pop(){for(unsigned i=1;i<count;++i)queue[i-1]=queue[i];if(count)--count;pos=0;}
+    void push(gbarecomp::TouchControl c,Scene s){if(count<queue.size())queue[count++]={c,s};}
+    std::uint16_t advance(Observation o,std::uint16_t host) {
+        const auto r=queue[0];const bool back=r.control==gbarecomp::TouchControl::Back;
+        const unsigned bit=back?1:3;
+        if((back && (o.scene!=r.scene || !can_back(o.scene) || host!=0x03ff)) ||
+           !(host&(1u<<bit))){pop();return 0x03ff;}
+        const auto k=pos<2?std::uint16_t(0x03ffu&~(1u<<bit)):std::uint16_t(0x03ff);
+        if(++pos==4)pop();return k;
+    }
+};
+inline Navigation navigation{};
 inline std::uint16_t menu_input_frame(const gbarecomp::TouchFrameInfo* f) {
     if(!f)return 0x03ff;
     const auto o=unpack(observed.load(std::memory_order_relaxed));
-    for(size_t i=0;i<f->event_count;++i)if(f->events[i].phase==gbarecomp::TouchPhase::Cancel){pending.clear();return 0x03ff;}
+    for(size_t i=0;i<f->event_count;++i)if(f->events[i].phase==gbarecomp::TouchPhase::Cancel){pending.clear();navigation.clear();return 0x03ff;}
     for(size_t i=0;i<f->gesture_count;++i){const auto kind=f->gestures[i].kind;
-        if(kind==gbarecomp::GestureKind::Cancel||kind==gbarecomp::GestureKind::Back||kind==gbarecomp::GestureKind::ThreeFingerTap){pending.clear();return 0x03ff;}}
+        if(kind==gbarecomp::GestureKind::Cancel||kind==gbarecomp::GestureKind::Back||kind==gbarecomp::GestureKind::ThreeFingerTap){pending.clear();navigation.clear();return 0x03ff;}}
 
+    // Raw HUD controls are already owned by the host, not gesture fallbacks.
+    // START composes with held directions/actions; traditional menu keys win.
+    for(size_t i=0;i<f->event_count;++i){const auto& e=f->events[i];
+        if(e.phase!=gbarecomp::TouchPhase::Down || e.control==gbarecomp::TouchControl::None)continue;
+        pending.clear();
+        if(e.control==gbarecomp::TouchControl::Start || can_back(o.scene))
+            navigation.push(e.control,o.scene);
+    }
+    if(navigation.count)return navigation.advance(o,f->host_keyinput);
     // Traditional input wins; never combine a held physical A/direction with
     // an automated confirmation for a different selection.
     if(f->host_keyinput!=0x03ff){pending.clear();return 0x03ff;}
     if(pending.scene!=Scene::None)return advance_plan(o);
-    if(o.scene==Scene::None||o.selected<0)return 0x03ff;
+    if(o.scene==Scene::None || (o.selected<0 && o.scene!=Scene::Option && o.scene!=Scene::Collection))return 0x03ff;
     const bool raw=f->event_count!=0;
     for(size_t i=0;i<(raw?f->event_count:f->gesture_count);++i){
         float vx,vy;bool inside;
-        if(raw){const auto& e=f->events[i];if(e.phase!=gbarecomp::TouchPhase::Down)continue;vx=e.view_x;vy=e.view_y;inside=e.in_view;}
+        if(raw){const auto& e=f->events[i];if(e.phase!=gbarecomp::TouchPhase::Down || e.control!=gbarecomp::TouchControl::None)continue;vx=e.view_x;vy=e.view_y;inside=e.in_view;}
         else {const auto& g=f->gestures[i];if(g.kind!=gbarecomp::GestureKind::Tap||g.fingers!=1)continue;vx=g.view_x;vy=g.view_y;inside=g.start_in_view;}
         if(!inside)continue;
         const float x=vx-f->extra_left,y=vy-f->extra_top;
         if(x<0||y<0||x>=240||y>=160)continue;
         int target=hit_target(o.scene,x,y);
-        if(o.scene!=Scene::Pause && x>=181&&x<=223&&y>=29&&y<=45)target=-2;
+        if(o.scene==Scene::Title && x>=76&&x<164&&y>=112&&y<128)target=-3;
+        else if((o.scene==Scene::Data||o.scene==Scene::Game||o.scene==Scene::Option) && x>=181&&x<=223&&y>=29&&y<=45)target=-2;
+        else if(o.scene==Scene::Collection && x>=181&&x<=223&&y>=21&&y<=34)target=-2;
         else if(target<0)continue; // no blanket A on unrelated/background pixels
         pending.clear();pending.scene=o.scene;pending.target=target;
         return advance_plan(o);
