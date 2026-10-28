@@ -3,6 +3,8 @@
 #include "mobile_platform.h"
 #include "runtime.h"
 #include "game_launcher_boot.h"
+#include "dragonball_special_meter.h"
+#include "dragonball_menu_touch.h"
 
 #ifndef GBARECOMP_BUILTIN_NAME
 #define GBARECOMP_BUILTIN_NAME "Dragon Ball: Advanced Adventure"
@@ -37,6 +39,24 @@ static int game_main(int argc, char** argv) {
   options.launcher_expose_gyro = false;
 #if defined(__ANDROID__)
   options.ui_touch_friendly = true;
+  // Four independent buttons: A = jump, B = punch, L = Power Pole,
+  // R = Ki/Kamehameha. Read-only guest image probe controls blue glow.
+  options.mobile_action_hud = true;
+  options.mobile_special_meter_probe = dragonball::special_meter_fill;
+  // Tap PRESS START and DATA/GAME/PAUSE choices; explicit BACK is
+  // context-gated. OPTION/COLLECTION preserve their original GBA pages.
+  // Gameplay is unchanged: unrecognized scenes synthesize no keys.
+  options.mobile_menu_frame_probe = dragonball::menu_touch::observe_menu_frame;
+  options.input_frame = dragonball::menu_touch::menu_input_frame;
+  // Menu navigation owns both short taps and long holds. Unclaimed
+  // LongPress is an engine shortcut that opens runtime settings after
+  // ~650 ms, stealing touch focus from the GBA menu. The game policy
+  // already acts on the initial TouchEvent::Down, so a hold must not
+  // trigger a separate host action or an extra A press.
+  // Runtime settings remain available through Android Back / the
+  // engine's explicit menu paths, rather than holding game-screen pixels.
+  options.touch_gesture_claims |=
+      gbarecomp::kTouchClaimTap | gbarecomp::kTouchClaimLongPress;
 #endif
   if (game_launcher_preboot(args, options)) return 0;
   std::vector<char*> native_args;
