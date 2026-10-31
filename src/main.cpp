@@ -39,6 +39,10 @@ static int game_main(int argc, char** argv) {
   // Optional author-supplied, host-only HD presentation pack.
   // Absent remaster/hdpack.json means the original GBA image is unchanged.
   options.hd_pack_manifest = "remaster/hdpack.json";
+  // Explicitly gated HD sprite/scene attribution for the remaster project.
+  // Does absolutely nothing unless the user places remaster/capture.flag
+  // inside Android app-private files/; no game graphics are extracted.
+  options.hd_obj_attribution_probe = true;
   options.launcher_expose_gyro = false;
 #if defined(__ANDROID__)
   options.ui_touch_friendly = true;
