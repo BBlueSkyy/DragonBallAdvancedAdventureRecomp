@@ -133,9 +133,53 @@ portrait changes, input/touch and fixed 60 Hz output. Confirm no remaster
 panel appears when its fingerprint does not match. Track FPS and GPU
 memory on the Moto G100 before enabling additional panels.
 
+## Stage 2 started: read-only Goku/scene attribution
+
+The HD engine now has an **explicitly gated** OBJ/BG snapshot probe. No probe
+runs during normal gameplay. To activate it for a single 1-minute gameplay
+diagnostic, use ADB with this **debug** Android APK installed:
+
+```sh
+adb shell run-as org.dbadvancedadventure.recomp mkdir -p files/remaster
+adb shell run-as org.dbadvancedadventure.recomp sh -c 'echo 1 > files/remaster/capture.flag'
+```
+
+**Force-close and restart the app** after enabling the flag. Navigate from
+PRESS START into a level, move Goku, jump, punch, use the Power Pole and
+Kamehameha, then visit a different background/area. The probe records OAM
+and BG identities at the real **scanline 0 boundary**, every 30 frames,
+capped at 120 samples. Normal session rendering remains native.
+
+Recover the report from the app-private directory with:
+
+```sh
+adb exec-out run-as org.dbadvancedadventure.recomp cat files/remaster/obj_attribution.jsonl > obj_attribution.jsonl
+```
+
+The report contains **no original tile or palette pixel bytes**, only
+per-object tile/palette FNV64 signatures and native OAM attributes,
+position, priority, mode and 4 BG control/scroll/screen-block hashes.
+Each line after the header is one independent sample. Correlating
+the changing object hashes and positions over multiple animation actions
+will let the next implementation identify the Goku animation groups and
+their foreground/background ordering **without guessing**. BG screen-block
+hashes are only reference hints, not complete decoded scenery.
+
+Remove the flag when done:
+
+```sh
+adb shell run-as org.dbadvancedadventure.recomp rm files/remaster/capture.flag
+```
+
+The probe does not write to GBA memory, interfere with snapshots, replace
+artwork or generate an HD atlas. **This is evidence collection, not yet
+Goku or scenery HD rendering**. Running with capture.flag enabled performs
+limited hash work; verify FPS and remove the flag after collecting the data.
+Normal unflagged gameplay skips the observer entirely.
+
 ## Explicitly NOT implemented yet
 
-- Mapping Goku's OAM entries, animation atlas or palette banks.
+- Verified identification of Goku's individual OAM animation groups (stage-2 probe has been added, device attribution pending).
 - Replacing individual **moving OBJ sprites** with smooth, larger images.
 - Rebuilding scrolling BG layers or their independent parallax/camera.
 - Handling OBJ/BG priority, alpha/window/blending and per-scanline occlusion.
