@@ -188,6 +188,26 @@ Goku or scenery HD rendering**. Running with capture.flag enabled performs
 limited hash work; verify FPS and remove the flag after collecting the data.
 Normal unflagged gameplay skips the observer entirely.
 
+### Identifying stable art signatures (additional offline analysis)
+
+In addition to the existing `analyze_hd_attribution.py` motion-based OAM
+ranking, the new **complementary** analyzer groups the same private metadata
+by `(OBJ tile hash, palette hash, native width/height, priority)`.
+This helps distinguish reused OAM slots from actual graphic data changes.
+It does not assign character names and does not extract or create images.
+
+```sh
+python3 scripts/analyze_hd_obj_capture.py \
+  --input obj_attribution.jsonl \
+  --out hd_obj_candidates.json
+```
+
+Compare `obj_candidates` with the existing motion ranking and recorded
+actions before labeling the Goku animation. Background map hashes are
+also grouped, but they are not complete source scenery. Actual HD art
+replacement remains pending source identification, transparency and
+correct per-layer occlusion. No runtime/PPU timing changes.
+
 ## Explicitly NOT implemented yet
 
 - Verified identification of Goku's individual OAM animation groups (stage-2 probe has been added, device attribution pending).
