@@ -1,0 +1,35 @@
+name: HD Remaster - ROM-free tests
+on:
+  push:
+    branches:
+      - feat/hd-remaster-presentation-stage1-20261031
+    paths:
+      - 'scripts/build_hd_pack.py'
+      - 'tests/hd_pack_test.py'
+      - 'docs/HD_REMASTER_STAGE1.md'
+      - '.github/workflows/hd-remaster-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  hd_remaster_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Fetch game sources
+        uses: actions/checkout@v4
+      - name: Prepare Pillow for synthetic image tests
+        run: python3 -m pip install --user Pillow
+      - name: Run private-pack generator tests (no ROM)
+        run: python3 -m unittest discover -s tests -p hd_pack_test.py -v
+      - name: Fetch pinned HD engine
+        run: |
+          git clone --depth 1 https://github.com/BBlueSkyy/gbarecomp.git /tmp/gbarecomp
+          git -C /tmp/gbarecomp fetch --depth 1 origin b79b5786a8e35225dd29044f32cde3f53d91dc11
+          git -C /tmp/gbarecomp checkout b79b5786a8e35225dd29044f32cde3f53d91dc11
+      - name: Compile and run HD fingerprint policy test
+        run: |
+          g++ -std=c++17 -I/tmp/gbarecomp/src/runtime \
+            /tmp/gbarecomp/tests/mod_runtime/hd_remaster_test.cpp -o /tmp/hdremaster
+          /tmp/hdremaster
