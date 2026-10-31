@@ -19,3 +19,13 @@ local.properties
 variants/*/cartridge.cmake
 
 __pycache__/
+
+# User-private graphics patches and extracted sprite resources. Source assets
+# must never be bundled with the published repository or distributable APK.
+*.ips
+*.ips32
+*.bps
+*.4bpp
+*.ips.json
+mods/sprite-overrides/
+private-sprites/
