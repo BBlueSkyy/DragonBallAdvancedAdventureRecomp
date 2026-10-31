@@ -2,6 +2,10 @@ name: Dragon Ball Advanced Adventure - Android ARM64
 
 on:
   workflow_dispatch:
+  # Branch-scoped CI to test this Draft PR without modifying main.
+  push:
+    branches:
+      - feat/db-advanced-sprite-overrides
 
 permissions:
   contents: read
@@ -29,7 +33,18 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Android SDK tooling
-        uses: android-actions/setup-android@v3
+        # Ubuntu's hosted runner already contains Android command-line tools.
+        # setup-android@v3 currently calls 'sdkmanager tools', a removed
+        # package name that fails before any project compilation begins.
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          test -d "$SDK_ROOT/cmdline-tools"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -n "$SDKMANAGER"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          "$SDKMANAGER" --version
 
       - name: Install Android build dependencies
         run: |

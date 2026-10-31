@@ -36,6 +36,15 @@ static int game_main(int argc, char** argv) {
   options.launcher_region = GBARECOMP_BUILTIN_REGION;
   options.launcher_game_config = GBARECOMP_DEFAULT_GAME_CONFIG;
   options.launcher_save_path = "saves/dragon_ball_advanced_adventure.sav";
+  // Opt-in, ROM-private sprite data patches: enabled only when the player
+  // explicitly picks a verified IPS/IPS32/BPS patch in the existing launcher.
+  // The unmodified BDVE cartridge remains the verified source; the original
+  // file is never written. No ROM, artwork or modified executable is bundled.
+  options.launcher_enable_rom_patches = true;
+  options.launcher_rom_patch_note =
+      "Optional graphics-only IPS patch for the verified USA BDVE ROM. "
+      "Use only data-only sprite tile patches made from your own cartridge; "
+      "the original ROM remains unchanged.";
   options.launcher_expose_gyro = false;
 #if defined(__ANDROID__)
   options.ui_touch_friendly = true;
