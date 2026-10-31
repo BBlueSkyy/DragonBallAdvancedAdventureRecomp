@@ -29,7 +29,17 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Android SDK tooling
-        uses: android-actions/setup-android@v3
+        # The hosted runner has Android command-line tools already.
+        # setup-android@v3 can attempt the removed 'sdkmanager tools' package.
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          test -d "$SDK_ROOT/cmdline-tools"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -n "$SDKMANAGER"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          "$SDKMANAGER" --version
 
       - name: Install Android build dependencies
         run: |
