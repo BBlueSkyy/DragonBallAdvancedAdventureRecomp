@@ -156,6 +156,17 @@ Recover the report from the app-private directory with:
 adb exec-out run-as org.dbadvancedadventure.recomp cat files/remaster/obj_attribution.jsonl > obj_attribution.jsonl
 ```
 
+You can also analyze the captured file locally, without uploading the game ROM:
+
+```sh
+python3 scripts/analyze_hd_attribution.py --input obj_attribution.jsonl --out hd_candidates.json
+```
+
+This prints motion-based OAM slot candidates and changing BG scroll/map
+signatures. **Do not treat a high ranking as proof that a slot is Goku**;
+compare frames with actual gameplay actions, then use verified sprite IDs
+and layers to implement the HD object compositor.
+
 The report contains **no original tile or palette pixel bytes**, only
 per-object tile/palette FNV64 signatures and native OAM attributes,
 position, priority, mode and 4 BG control/scroll/screen-block hashes.
