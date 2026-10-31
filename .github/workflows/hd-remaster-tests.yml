@@ -26,10 +26,15 @@ jobs:
       - name: Fetch pinned HD engine
         run: |
           git clone --depth 1 https://github.com/BBlueSkyy/gbarecomp.git /tmp/gbarecomp
-          git -C /tmp/gbarecomp fetch --depth 1 origin b79b5786a8e35225dd29044f32cde3f53d91dc11
-          git -C /tmp/gbarecomp checkout b79b5786a8e35225dd29044f32cde3f53d91dc11
+          git -C /tmp/gbarecomp fetch --depth 1 origin 8a51e28b5e6cdf56b2c3d1c9a5baa9264192937c
+          git -C /tmp/gbarecomp checkout 8a51e28b5e6cdf56b2c3d1c9a5baa9264192937c
       - name: Compile and run HD fingerprint policy test
         run: |
           g++ -std=c++17 -I/tmp/gbarecomp/src/runtime \
             /tmp/gbarecomp/tests/mod_runtime/hd_remaster_test.cpp -o /tmp/hdremaster
           /tmp/hdremaster
+      - name: Compile and verify native OBJ/BG metadata decoder
+        run: |
+          g++ -std=c++17 -I/tmp/gbarecomp/src/gba -I/tmp/gbarecomp/src/runtime \
+            /tmp/gbarecomp/tests/mod_runtime/hd_obj_attribution_test.cpp -o /tmp/hdobj
+          /tmp/hdobj
