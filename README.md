@@ -2,6 +2,20 @@
 
 **Status:** technical starter only. This is **not a playable port or an APK**. No cartridge ROM, BIOS, game assets, or generated ROM-derived C++ is included.
 
+## Experimental sprite replacements (ROM-private)
+
+This fork now has an **opt-in, validated IPS sprite-tile patch workflow**:
+see [Sprite override documentation](docs/SPRITE_OVERRIDES.md).
+A local utility converts palette-indexed PNG graphics to GBA 4bpp tiles
+and emits an IPS patch **only after** checking the original BDVE ROM
+identity, exact source bytes and tile sizes. The user selects the patch in
+the existing launcher; no ROM or proprietary sprite graphics are bundled.
+
+**Current limit:** no actual Goku/HUD/FX ROM tile identity has yet been
+confirmed and no sprite replacement has been validated on-device. Native
+graphics mapping requires private cartridge analysis; compressed tiles
+are explicitly unsupported by this first stage.
+
 ## Intent
 
 - Target Android ARM64 from day one, using gbarecomp's shared Android SDL shell.
