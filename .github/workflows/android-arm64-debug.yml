@@ -41,30 +41,10 @@ jobs:
             'ndk;27.1.12297006' \
             'cmake;3.22.1'
 
-      # The default GITHUB_TOKEN is scoped to this game repository and
-      # cannot automatically read the separate *private* gbarecomp engine.
-      # Add a repository Actions secret GBARECOMP_READ_TOKEN with read-only
-      # Contents access to BBlueSkyy/gbarecomp (fine-grained PAT / GitHub App).
-      - name: Verify private engine access token is configured
-        env:
-          GBARECOMP_READ_TOKEN: ${{ secrets.GBARECOMP_READ_TOKEN }}
+      - name: Fetch pinned GBARecomp engine and UI
         run: |
-          if [ -z "$GBARECOMP_READ_TOKEN" ]; then
-            echo "::error::Configure Actions secret GBARECOMP_READ_TOKEN with Contents: Read permission on the private BBlueSkyy/gbarecomp repository."
-            exit 1
-          fi
-
-      - name: Checkout pinned private GBARecomp engine
-        uses: actions/checkout@v4
-        with:
-          repository: BBlueSkyy/gbarecomp
-          ref: bc24482b1232b38e39798098a638121121e838eb
-          path: gbarecomp
-          token: ${{ secrets.GBARECOMP_READ_TOKEN }}
-          persist-credentials: false
-
-      - name: Fetch engine public submodules and pinned recomp-ui
-        run: |
+          git clone https://github.com/BBlueSkyy/gbarecomp.git gbarecomp
+          git -C gbarecomp checkout bc24482b1232b38e39798098a638121121e838eb
           git -C gbarecomp submodule set-url external/arm-recomp-core https://github.com/mstan/arm-recomp-core.git
           git -C gbarecomp submodule update --init --recursive --jobs 4
           git clone https://github.com/mstan/recomp-ui.git recomp-ui
