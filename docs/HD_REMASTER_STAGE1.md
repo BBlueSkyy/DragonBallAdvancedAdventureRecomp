@@ -23,10 +23,12 @@ native and the original PPU frame stays byte-for-byte unchanged.
   altered/unknown frame signatures are all rejected. Any failed image load
   prevents the entire pack from activating.
 - On Android, the engine resolves the relative pack filename in SDL's
-  app-private **gbarecomp/hd-packs preference directory**, e.g. the
-  \`SDL_GetPrefPath("gbarecomp","hd-packs")\` directory. It logs the path
-  once when missing. This avoids APK read-only paths. On desktop, the path
-  is relative to the executable directory.
+  app-private **files/remaster/** directory. SDL2 Android ignores the
+  org/app arguments to SDL_GetPrefPath: it returns the app's internal
+  storage directory directly, typically
+  /data/user/0/org.dbadvancedadventure.recomp/files/.
+  The engine logs the full optional pack path once when missing.
+  On desktop, the path is relative to the executable directory.
 - All textures are created at session setup, not in the emulation loop.
   If the pack is absent, there is no HD matching, rendering or allocation
   in the per-frame path. Original touch mapping, native rendering, clocks,
@@ -62,9 +64,10 @@ python3 scripts/build_hd_pack.py \
 The script writes only \`panel.bmp\` and \`hdpack.json\`. It does not
 copy the source GBA screenshot, ROM, BIOS or existing game artwork.
 Both output files stay private. Place them together under the app's
-\`remaster/\` directory inside the SDL preference root named above; the
-engine logs the expected complete \`hdpack.json\` path to help with
-Android debug builds. Never commit original game assets.
+remaster/ directory inside the app-private files/ directory,
+typically /data/user/0/org.dbadvancedadventure.recomp/files/remaster/.
+The engine logs the full path. Android 12 file managers cannot write here:
+use a debug APK and adb run-as, or a future in-game importer. Never commit original game assets.
 
 Once a verified match is active, the overlay replaces only that small
 static region with smooth HD art. During other scenes it automatically
@@ -89,6 +92,25 @@ removing/renaming \`hdpack.json\`. No update to game saves is required.
 
 The example signature is deliberately not associated with any commercial
 GBA ROM/frame; it will **not** activate a visible overlay.
+
+
+### Deploying a pack to the Android debug APK
+
+The package ID is `org.dbadvancedadventure.recomp`. SDL2 Android resolves
+`remaster/hdpack.json` relative to the app-private `files/` directory.
+It does **not** create `files/gbarecomp/hd-packs/`.
+
+```sh
+adb shell run-as org.dbadvancedadventure.recomp mkdir -p files/remaster
+adb exec-out run-as org.dbadvancedadventure.recomp sh -c 'cat > files/remaster/hdpack.json' < /private/remaster/hdpack.json
+adb exec-out run-as org.dbadvancedadventure.recomp sh -c 'cat > files/remaster/panel.bmp' < /private/remaster/panel.bmp
+```
+
+Requires an installed debuggable APK and ADB. Verify the exact missing
+manifest location with `adb logcat` before copying. The HD pack is loaded
+once per game session: force-close and reopen after installing a pack.
+Only a byte-matching, unfiltered native RGB888 source frame from this
+port will activate a region; phone screenshots do not qualify.
 
 ## Native verification
 
