@@ -36,6 +36,13 @@ static int game_main(int argc, char** argv) {
   options.launcher_region = GBARECOMP_BUILTIN_REGION;
   options.launcher_game_config = GBARECOMP_DEFAULT_GAME_CONFIG;
   options.launcher_save_path = "saves/dragon_ball_advanced_adventure.sav";
+  // Optional author-supplied, host-only HD presentation pack.
+  // Absent remaster/hdpack.json means the original GBA image is unchanged.
+  options.hd_pack_manifest = "remaster/hdpack.json";
+  // Explicitly gated HD sprite/scene attribution for the remaster project.
+  // Does absolutely nothing unless the user places remaster/capture.flag
+  // inside Android app-private files/; no game graphics are extracted.
+  options.hd_obj_attribution_probe = true;
   options.launcher_expose_gyro = false;
 #if defined(__ANDROID__)
   options.ui_touch_friendly = true;

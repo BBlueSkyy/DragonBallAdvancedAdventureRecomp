@@ -19,3 +19,8 @@ local.properties
 variants/*/cartridge.cmake
 
 __pycache__/
+
+# Local HD remaster packs: authored artwork and native game screenshots stay private.
+remaster/
+private-remaster/
+*.hdpack.bmp
