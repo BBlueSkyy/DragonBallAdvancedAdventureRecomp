@@ -61,7 +61,7 @@ class AnalyzeHdCaptureTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"duplicate OAM"):
             parse_capture(capture(frame))
         with self.assertRaisesRegex(ValueError,"header"):
-            parse_capture(json.dumps({"format":"invalid"}) + "\\n" + json.dumps(sample(1,1,1)) + "\\n")
+            parse_capture(json.dumps({"format":"invalid"}) + "\n" + json.dumps(sample(1,1,1)) + "\\n")
 
     def test_limit_and_non_frame(self):
         with self.assertRaisesRegex(ValueError,"1..120"):
