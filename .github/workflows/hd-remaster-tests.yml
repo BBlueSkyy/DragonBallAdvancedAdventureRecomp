@@ -5,7 +5,9 @@ on:
       - feat/hd-remaster-presentation-stage1-20261031
     paths:
       - 'scripts/build_hd_pack.py'
+      - 'scripts/analyze_hd_attribution.py'
       - 'tests/hd_pack_test.py'
+      - 'tests/hd_attribution_analysis_test.py'
       - 'docs/HD_REMASTER_STAGE1.md'
       - '.github/workflows/hd-remaster-tests.yml'
   workflow_dispatch:
@@ -23,6 +25,8 @@ jobs:
         run: python3 -m pip install --user Pillow
       - name: Run private-pack generator tests (no ROM)
         run: python3 -m unittest discover -s tests -p hd_pack_test.py -v
+      - name: Run OBJ/BG attribution analyzer tests (synthetic only)
+        run: python3 -m unittest discover -s tests -p hd_attribution_analysis_test.py -v
       - name: Fetch pinned HD engine
         run: |
           git clone --depth 1 https://github.com/BBlueSkyy/gbarecomp.git /tmp/gbarecomp
